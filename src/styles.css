@@ -1,0 +1,338 @@
+@import 'tailwindcss';
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+:root {
+  color-scheme: light;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100vh;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell > header {
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-left: calc(1rem + env(safe-area-inset-left));
+}
+
+.app-shell > nav {
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-left: calc(1rem + env(safe-area-inset-left));
+}
+
+.app-shell > main {
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-left: calc(1rem + env(safe-area-inset-left));
+}
+
+button {
+  cursor: pointer;
+}
+
+.reset-confirmation-backdrop {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 65%);
+}
+
+.reset-confirmation-dialog {
+  width: min(100%, 28rem);
+}
+
+.tube-map-viewport {
+  max-height: min(76vh, 960px);
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+}
+
+.route-action-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.route-options {
+  width: 100%;
+  max-height: min(45vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  .tube-map-viewport {
+    max-height: min(66svh, 720px);
+  }
+
+  .route-action-bar {
+    position: fixed;
+    z-index: 110;
+    right: calc(0.75rem + env(safe-area-inset-right));
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    left: calc(0.75rem + env(safe-area-inset-left));
+    justify-content: stretch;
+    margin: 0;
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 94%);
+    box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
+    backdrop-filter: blur(12px);
+    max-height: 55svh;
+    overflow-y: auto;
+  }
+
+  .route-action-bar button {
+    width: 100%;
+  }
+
+  .route-action-bar.has-options .route-primary-action {
+    align-items: stretch;
+  }
+
+  .route-options {
+    max-height: 36svh;
+  }
+
+  .tube-map-viewport:has(+ .map-inspection-panel) {
+    max-height: calc(min(66svh, 720px) - 68px);
+  }
+
+  html[data-theme='dark'] .route-action-bar {
+    border-color: #334155;
+    background: rgb(15 23 42 / 94%);
+  }
+}
+
+@media (max-width: 640px) and (max-height: 700px) {
+  .tube-map-viewport {
+    max-height: 62svh;
+  }
+
+  .tube-map-viewport:has(+ .map-inspection-panel) {
+    max-height: calc(62svh - 68px);
+  }
+}
+
+.app-shell[data-map-fullscreen='true'] > header,
+.app-shell[data-map-fullscreen='true'] > nav {
+  display: none;
+}
+
+.app-shell[data-map-fullscreen='true'] > main.map-main {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.app-shell[data-map-fullscreen='true'] .map-card {
+  display: flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left));
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
+.app-shell[data-map-fullscreen='true'] .map-card > .mb-3 {
+  flex: none;
+}
+
+.fullscreen-theme-control {
+  display: none;
+}
+
+.app-shell[data-map-fullscreen='true'] .fullscreen-theme-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell[data-map-fullscreen='true'] .tube-map-viewport {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+html:has(.app-shell[data-map-fullscreen='true']),
+body:has(.app-shell[data-map-fullscreen='true']) {
+  overflow: hidden;
+}
+
+.tube-map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+}
+
+.tube-map-viewport {
+  cursor: grab;
+  user-select: none;
+}
+
+.tube-map-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.tube-map-viewport:has(text[data-app-station-id]:hover) {
+  cursor: pointer;
+}
+
+.tube-map__svg #bg > .progress > rect:first-of-type {
+  transition: fill 150ms ease;
+}
+
+.tube-map__svg [data-app-station-id] {
+  cursor: pointer !important;
+  pointer-events: all;
+  outline: none !important;
+}
+
+.tube-map__svg .app-station-hit-area {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.tube-map__svg [cursor='help'] {
+  cursor: default !important;
+}
+
+.tube-map__svg #text #stname text,
+.tube-map__svg #text #stname tspan,
+.tube-map__svg #text #stname_interchanges text,
+.tube-map__svg #text #stname_interchanges tspan {
+  font-weight: 400 !important;
+  text-decoration: none !important;
+}
+
+.tube-map__svg text[data-app-station-id] {
+  transition: fill 120ms ease, font-weight 120ms ease;
+}
+
+.tube-map__svg text[data-app-state='visited']:not([data-app-selected='true']) {
+  fill: #15803d !important;
+}
+
+.tube-map__svg text[data-app-state='entered']:not([data-app-selected='true']) {
+  fill: #15803d !important;
+}
+
+.tube-map__svg text[data-app-state='changed']:not([data-app-selected='true']) {
+  fill: #b45309 !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='visited']:not([data-app-selected='true']) tspan,
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='entered']:not([data-app-selected='true']) tspan {
+  fill: #15803d !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='changed']:not([data-app-selected='true']) tspan {
+  fill: #b45309 !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true'],
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'],
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus {
+  fill: #b45309 !important;
+  filter: none !important;
+  stroke: none !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] {
+  font-weight: 700 !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true'] tspan,
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] tspan,
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus tspan {
+  fill: #b45309 !important;
+  filter: none !important;
+  stroke: none !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] tspan {
+  font-weight: 700 !important;
+}
+
+.tube-map__svg #routes .snorthern,
+.tube-map__svg #routes .fnorthern {
+  stroke: #000 !important;
+}
+
+.tube-map__svg #routes .fnorthern {
+  fill: #000 !important;
+}
+
+html[data-theme='dark'] .tube-map__svg #bg > .progress > rect:first-of-type {
+  fill: #0f172a !important;
+}
+
+html[data-theme='dark'] .tube-map__svg #bg .progress .zone1-background {
+  fill: #1e293b !important;
+  stroke: #334155 !important;
+}
+
+html[data-theme='dark'] .tube-map__svg .st {
+  fill: #e2e8f0;
+}
+
+.tube-map__svg text[data-app-hovered='true'],
+.tube-map__svg text[data-app-selected='true'],
+.tube-map__svg text[data-app-station-id]:focus {
+  font-weight: 400;
+}
+
+html[data-theme='dark'] .app-shell {
+  color: #fff !important;
+}
+
+html[data-theme='dark'] .app-shell * {
+  color: #fff !important;
+}
+
+html[data-theme='dark'] .app-shell nav button[class*='dark:bg-slate-100'] {
+  background-color: #334155;
+}
+
+html[data-theme='dark'] .tube-map__svg text,
+html[data-theme='dark'] .tube-map__svg tspan {
+  fill: #fff !important;
+  paint-order: stroke;
+  stroke: #0f172a;
+  stroke-linejoin: round;
+  stroke-width: 2px;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}

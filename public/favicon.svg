@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Tube Tracker">
+  <rect width="128" height="128" rx="26" fill="#0f172a"/>
+  <circle cx="64" cy="64" r="42" fill="#22c55e"/>
+  <path d="M41 79 L57 36 L72 79 Z" fill="#ffffff" opacity="0.85"/>
+  <circle cx="64" cy="64" r="8" fill="#0f172a"/>
+</svg>

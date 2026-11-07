@@ -1,0 +1,32 @@
+Tube Tracker: third-party data and map attribution
+
+Map SVG
+-------
+The London transport map SVG is based on work by Sameboat:
+https://commons.wikimedia.org/wiki/User:Sameboat
+Original map:
+https://commons.wikimedia.org/wiki/File:London_Underground_Overground_DLR_Crossrail_map_alt.svg
+
+The map is adapted for Tube Tracker, including changes to its presentation and
+interactive behavior. The original work and this adaptation are licensed under
+the Creative Commons Attribution-ShareAlike 4.0 International license
+(CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/
+
+TfL data
+--------
+Station and network data are provided by Transport for London (TfL) via the
+TfL Unified API:
+https://api.tfl.gov.uk/
+
+This data is made available under the Open Government Licence v3.0:
+https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+
+TfL is not responsible for this application.
+
+Upstream reference
+------------------
+This project references Demianeen's tube-map project:
+https://github.com/Demianeen/tube-map
+
+Tube Tracker is not an official TfL service.
