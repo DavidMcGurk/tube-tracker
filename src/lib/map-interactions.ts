@@ -26,6 +26,18 @@ export function hasAlternativeRoutes(routes: readonly RouteResult[]) {
   return routes.length > 1;
 }
 
+export function getRouteStationIds(route: RouteResult | null) {
+  return new Set(route?.path ?? []);
+}
+
+export function getActiveRoute(selectedRoute: RouteResult | null, shortestRoute: RouteResult | null) {
+  return selectedRoute ?? shortestRoute;
+}
+
+export function getRouteKey(route: RouteResult) {
+  return route.segments.map((section) => section.id).join('|');
+}
+
 export function formatRouteEndpoints(startStationName?: string, endStationName?: string) {
   return startStationName && endStationName ? `${startStationName} → ${endStationName}` : '';
 }

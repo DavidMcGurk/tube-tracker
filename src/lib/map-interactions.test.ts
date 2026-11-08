@@ -5,6 +5,9 @@ import {
   createStationLabelIndex,
   DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
+  getActiveRoute,
+  getRouteKey,
+  getRouteStationIds,
   hasAlternativeRoutes,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
@@ -37,6 +40,29 @@ describe('map interaction helpers', () => {
     expect(hasAlternativeRoutes([])).toBe(false);
     expect(hasAlternativeRoutes([primaryRoute])).toBe(false);
     expect(hasAlternativeRoutes([primaryRoute, alternateRoute])).toBe(true);
+  });
+
+  it('can identify only the stations and sections belonging to a route preview', () => {
+    const stationId = (name: string) => stations.find((station) => station.name === name)?.id;
+    const cannonStreet = stationId('Cannon Street');
+    const waterloo = stationId('Waterloo');
+    if (!cannonStreet || !waterloo) throw new Error('Expected route-preview stations in the network');
+
+    const options = findRoutes(cannonStreet, waterloo, 2);
+    const first = options[0];
+    const alternative = options[1];
+    expect(first).toBeDefined();
+    expect(alternative).toBeDefined();
+    if (!first || !alternative) throw new Error('Expected alternative route options');
+
+    const routeStationIds = getRouteStationIds(first);
+    expect(routeStationIds.has(cannonStreet)).toBe(true);
+    expect(routeStationIds.has(waterloo)).toBe(true);
+    expect(routeStationIds.size).toBe(first.path.length);
+    expect(getRouteKey(first)).not.toBe(getRouteKey(alternative));
+    expect(getRouteStationIds(alternative)).toEqual(new Set(alternative.path));
+    expect(getActiveRoute(alternative, first)).toBe(alternative);
+    expect(getActiveRoute(null, first)).toBe(first);
   });
 
   it('hides the alternatives control for a direct journey and offers it when options exist', () => {

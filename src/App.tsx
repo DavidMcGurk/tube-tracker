@@ -2,11 +2,15 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { findRoutes, getStationById, lines, stations } from './data/network';
 import { addRouteToProgress, EMPTY_PROGRESS, getStationState, routeIsAlreadyComplete, summariseProgress } from './lib/progress';
 import { loadProgress, loadTheme, saveProgress, saveTheme } from './lib/storage';
+import { getScrollPositionToCenterBounds } from './lib/map-view';
 import {
   clampMapZoom,
   createStationLabelIndex,
   DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
+  getActiveRoute,
+  getRouteKey,
+  getRouteStationIds,
   hasAlternativeRoutes,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
@@ -213,6 +217,7 @@ function App() {
   const [hoveredStationId, setHoveredStationId] = useState<string | null>(null);
   const [mapInspection, setMapInspection] = useState<MapInspection | null>(null);
   const [routeChooserOpen, setRouteChooserOpen] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<RouteResult | null>(null);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [referenceMapSvg, setReferenceMapSvg] = useState('');
@@ -316,8 +321,22 @@ function App() {
     const previousView = mapViewRef.current;
     if (mapViewportRef.current !== viewport) {
       if (!hasInitialMapViewRef.current && window.matchMedia('(max-width: 640px)').matches) {
-        viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
-        viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+        const zoneOne = svg.querySelector<SVGGElement>('#bg .zone1-background');
+        if (zoneOne) {
+          const viewportBounds = viewport.getBoundingClientRect();
+          const zoneOneBounds = zoneOne.getBoundingClientRect();
+          const position = getScrollPositionToCenterBounds(
+            { scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop },
+            { left: viewportBounds.left, top: viewportBounds.top, width: viewport.clientWidth, height: viewport.clientHeight },
+            { left: zoneOneBounds.left, top: zoneOneBounds.top, width: zoneOneBounds.width, height: zoneOneBounds.height },
+            { width: viewport.scrollWidth, height: viewport.scrollHeight }
+          );
+          viewport.scrollLeft = position.scrollLeft;
+          viewport.scrollTop = position.scrollTop;
+        } else {
+          viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
+          viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+        }
       } else {
         viewport.scrollLeft = previousView.scrollLeft;
         viewport.scrollTop = previousView.scrollTop;
@@ -434,6 +453,17 @@ function App() {
     if (!startId || !endId) return [];
     return findRoutes(startId, endId, routeChooserOpen ? 30 : 2);
   }, [routeChooserOpen, selectedStationIds]);
+  const activeRoute = getActiveRoute(selectedRoute, routePreview);
+  const routeStationIds = getRouteStationIds(activeRoute);
+
+  useEffect(() => {
+    const svg = mapRef.current?.querySelector('svg');
+    if (!svg) return;
+    svg.querySelectorAll<SVGElement>('[data-app-station-id]').forEach((element) => {
+      const stationId = element.getAttribute('data-app-station-id');
+      element.setAttribute('data-app-route', String(Boolean(stationId && routeStationIds.has(stationId))));
+    });
+  }, [activeRoute, referenceMapSvg]);
   const routeEndpoints = useMemo(() => {
     const [startId, endId] = selectedStationIds;
     if (!startId || !endId) return '';
@@ -459,23 +489,26 @@ function App() {
     setProgress(nextProgress);
     await saveProgress(nextProgress);
     setSelectedStationIds([]);
+    setSelectedRoute(null);
     setRouteChooserOpen(false);
   };
 
   const handleRecordRoute = () => {
-    if (routePreview) void commitRoute(routePreview);
+    if (activeRoute) void commitRoute(activeRoute);
   };
 
   const resetProgress = async () => {
     setProgress(EMPTY_PROGRESS);
     await saveProgress(EMPTY_PROGRESS);
     setSelectedStationIds([]);
+    setSelectedRoute(null);
     setRouteChooserOpen(false);
     setResetConfirmationOpen(false);
   };
 
   const handleStationClick = (stationId: string) => {
     setMapInspection(null);
+    setSelectedRoute(null);
     setRouteChooserOpen(false);
     setSelectedStationIds((current) => toggleStationSelection(current, stationId));
   };
@@ -510,6 +543,7 @@ function App() {
     if (!inspectMapTarget(event.target)) return;
     event.preventDefault();
     setSelectedStationIds([]);
+    setSelectedRoute(null);
     setRouteChooserOpen(false);
   };
 
@@ -618,6 +652,7 @@ function App() {
         const destinationId = target?.closest<SVGElement>('[data-app-station-id]')?.getAttribute('data-app-station-id');
         if (destinationId && destinationId !== stationDrag.stationId) {
           setSelectedStationIds([stationDrag.stationId, destinationId]);
+          setSelectedRoute(null);
           setMapInspection(null);
           setRouteChooserOpen(false);
         }
@@ -654,7 +689,7 @@ function App() {
   };
 
   return (
-    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-map-fullscreen={mapFullscreen}>
+    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen}>
       <header className="border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <h1 className="text-xl font-semibold">Tube Tracker</h1>
@@ -688,7 +723,7 @@ function App() {
           <div className="map-card rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-3 flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
-                <button className="min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700" onClick={() => setSelectedStationIds([])}>
+                <button className="min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700" onClick={() => { setSelectedStationIds([]); setSelectedRoute(null); setRouteChooserOpen(false); }}>
                   Clear
                 </button>
                 <button
@@ -783,18 +818,18 @@ function App() {
               <div className={`route-action-bar mt-3 flex justify-end${routeChooserOpen ? ' has-options' : ''}`}>
                 <div className="route-primary-action flex w-full flex-wrap items-center justify-between gap-2">
                   <p className="min-w-0 flex-1 text-sm font-medium">
-                    Route 1: {getRouteLineNames(routePreview).join(' → ')}
+                    Route {Math.max(1, routeOptions.findIndex((route) => getRouteKey(route) === getRouteKey(activeRoute ?? routePreview)) + 1)}: {getRouteLineNames(activeRoute ?? routePreview).join(' → ')}
                     {routeEndpoints && (
                       <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{routeEndpoints}</span>
                     )}
-                    {routePreview.transferStations.length > 0 && (
+                    {(activeRoute ?? routePreview).transferStations.length > 0 && (
                       <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">
-                        Change at {getRouteTransferNames(routePreview).join(', ')}
+                        Change at {getRouteTransferNames(activeRoute ?? routePreview).join(', ')}
                       </span>
                     )}
                   </p>
                   <button onClick={handleRecordRoute} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
-                    {routeIsAlreadyComplete(progress, routePreview) ? 'Already explored' : 'Record route'}
+                    {routeIsAlreadyComplete(progress, activeRoute ?? routePreview) ? 'Already explored' : 'Record route'}
                   </button>
                 </div>
                 {routeChooserOpen && routeOptions.length > 1 && (
@@ -806,8 +841,9 @@ function App() {
                       return (
                         <button
                           key={route.segments.map((section) => section.id).join('|')}
-                          className="min-h-14 w-full rounded-xl border border-slate-300 px-3 py-2 text-left text-sm dark:border-slate-600"
-                          onClick={() => void commitRoute(route)}
+                          aria-pressed={getRouteKey(route) === getRouteKey(activeRoute ?? routePreview)}
+                          className={`min-h-14 w-full rounded-xl border px-3 py-2 text-left text-sm dark:border-slate-600 ${getRouteKey(route) === getRouteKey(activeRoute ?? routePreview) ? 'border-blue-600 bg-blue-50 dark:bg-blue-950' : 'border-slate-300'}`}
+                          onClick={() => setSelectedRoute(route)}
                         >
                           <span className="block font-medium">
                             Route {index + 1}: {lineNames.join(' → ')}

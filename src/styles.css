@@ -76,6 +76,48 @@ button {
   overscroll-behavior: contain;
 }
 
+@media (min-width: 641px) {
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+    display: grid;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) > main.map-main {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-card {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-card > .mb-3,
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .route-action-bar {
+    flex: none;
+  }
+
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .tube-map-viewport {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .route-options {
+    max-height: min(28vh, 300px);
+  }
+}
+
 @media (max-width: 640px) {
   .tube-map-viewport {
     max-height: min(66svh, 720px);
@@ -282,6 +324,16 @@ body:has(.app-shell[data-map-fullscreen='true']) {
 
 .tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] tspan {
   font-weight: 700 !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-route='true'],
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-route='true'] tspan {
+  fill: #1d4ed8 !important;
+  font-weight: 700 !important;
+}
+
+.tube-map__svg #station_nodes [data-app-route='true'] {
+  filter: drop-shadow(0 0 3px #2563eb);
 }
 
 .tube-map__svg #routes .snorthern,
