@@ -344,7 +344,7 @@ body:has(.app-shell[data-map-fullscreen='true']) {
 }
 
 #app-travelled-sections {
-  opacity: 0.88;
+  opacity: 0.95;
 }
 
 #app-route-preview-sections {
@@ -353,7 +353,7 @@ body:has(.app-shell[data-map-fullscreen='true']) {
 
 .tube-map__svg .app-travelled-section {
   fill: none;
-  stroke: #d97706;
+  stroke: #facc15;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 16px;

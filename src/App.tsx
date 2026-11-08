@@ -993,10 +993,10 @@ function App() {
                 >
                   <ThemeIcon resolvedTheme={resolvedTheme} />
                 </button>
-                <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Amber highlights show travelled sections and stations">
+                <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Yellow highlights show travelled sections and stations">
                   <span className="relative inline-flex h-4 w-6 items-center" aria-hidden="true">
-                    <span className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded bg-amber-600 dark:bg-amber-400" />
-                    <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-700 bg-white dark:border-amber-400 dark:bg-slate-900" />
+                    <span className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded bg-yellow-400 dark:bg-yellow-300" />
+                    <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-yellow-500 bg-white dark:border-yellow-300 dark:bg-slate-900" />
                   </span>
                   Travelled
                 </span>
