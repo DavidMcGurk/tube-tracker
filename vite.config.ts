@@ -13,7 +13,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Tube Tracker',
-        short_name: 'TubeTracker',
+        short_name: 'Tube Tracker',
         description: 'Track your London transport network progress offline.',
         theme_color: '#0f172a',
         background_color: '#0f172a',

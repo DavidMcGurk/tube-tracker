@@ -1,8 +1,9 @@
-# Tube Tracker PWA
+# Tube Tracker
 
 Tube Tracker is a Progressive Web App for tracking progress across London's public-transport network. It keeps the original map-first product concept while replacing the native iOS architecture with a browser-based, installable app.
 
-**Live app:** [https://davidmcgurk.github.io/tube_tracker/](https://davidmcgurk.github.io/tube_tracker/)
+**Live app:** [https://davidmcgurk.github.io/tube-tracker/](https://davidmcgurk.github.io/tube-tracker/)  
+**GitHub repository:** [github.com/DavidMcGurk/tube-tracker](https://github.com/DavidMcGurk/tube-tracker)
 
 ## Stack
 
