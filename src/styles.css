@@ -281,30 +281,24 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   transition: fill 120ms ease, font-weight 120ms ease;
 }
 
-.tube-map__svg text[data-app-state='visited']:not([data-app-selected='true']) {
+.tube-map__svg text[data-app-state='entered'] {
   fill: #15803d !important;
 }
 
-.tube-map__svg text[data-app-state='entered']:not([data-app-selected='true']) {
-  fill: #15803d !important;
-}
-
-.tube-map__svg text[data-app-state='changed']:not([data-app-selected='true']) {
+.tube-map__svg text[data-app-state='changed'] {
   fill: #b45309 !important;
 }
 
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='visited']:not([data-app-selected='true']) tspan,
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='entered']:not([data-app-selected='true']) tspan {
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='entered'] tspan {
   fill: #15803d !important;
 }
 
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='changed']:not([data-app-selected='true']) tspan {
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='changed'] tspan {
   fill: #b45309 !important;
 }
 
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true'],
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'],
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus {
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true']:not([data-app-selected='true']),
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus:not([data-app-selected='true']) {
   fill: #b45309 !important;
   filter: none !important;
   stroke: none !important;
@@ -314,9 +308,8 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   font-weight: 700 !important;
 }
 
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true'] tspan,
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] tspan,
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus tspan {
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true']:not([data-app-selected='true']) tspan,
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus:not([data-app-selected='true']) tspan {
   fill: #b45309 !important;
   filter: none !important;
   stroke: none !important;
@@ -326,14 +319,54 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   font-weight: 700 !important;
 }
 
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-route='true'],
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-route='true'] tspan {
-  fill: #1d4ed8 !important;
-  font-weight: 700 !important;
+.tube-map__svg #station_nodes [data-app-state='visited'] {
+  filter: drop-shadow(0 0 3px #facc15) drop-shadow(0 0 2px #facc15);
 }
 
-.tube-map__svg #station_nodes [data-app-route='true'] {
-  filter: drop-shadow(0 0 3px #2563eb);
+.tube-map__svg #bg .zone1-label {
+  fill: #475569 !important;
+}
+
+.tube-map__svg #text .fcircle,
+.tube-map__svg #text .fcircle text,
+.tube-map__svg #text .fcircle tspan,
+.tube-map__svg #text .flioness,
+.tube-map__svg #text .flioness text,
+.tube-map__svg #text .flioness tspan {
+  fill: #111 !important;
+}
+
+.tube-map__svg #text .fcircle text[data-app-station-id],
+.tube-map__svg #text .fcircle text[data-app-station-id] tspan,
+.tube-map__svg #text .flioness text[data-app-station-id],
+.tube-map__svg #text .flioness text[data-app-station-id] tspan {
+  fill: #111 !important;
+}
+
+#app-travelled-sections {
+  opacity: 0.88;
+}
+
+#app-route-preview-sections {
+  opacity: 0.88;
+}
+
+.tube-map__svg .app-travelled-section {
+  fill: none;
+  stroke: #d97706;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 16px;
+  pointer-events: none;
+}
+
+.tube-map__svg .app-route-preview-section {
+  fill: none;
+  stroke: #f97316;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 16px;
+  pointer-events: none;
 }
 
 .tube-map__svg #routes .snorthern,
@@ -354,14 +387,46 @@ html[data-theme='dark'] .tube-map__svg #bg .progress .zone1-background {
   stroke: #334155 !important;
 }
 
+html[data-theme='dark'] .tube-map__svg #bg .zone1-label {
+  fill: #cbd5e1 !important;
+}
+
+html[data-theme='dark'] .tube-map__svg .app-travelled-section {
+  stroke: #fbbf24;
+}
+
+html[data-theme='dark'] .tube-map__svg #text .fcircle,
+html[data-theme='dark'] .tube-map__svg #text .fcircle text,
+html[data-theme='dark'] .tube-map__svg #text .fcircle tspan,
+html[data-theme='dark'] .tube-map__svg #text .flioness,
+html[data-theme='dark'] .tube-map__svg #text .flioness text,
+html[data-theme='dark'] .tube-map__svg #text .flioness tspan {
+  fill: #111 !important;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-linejoin: round;
+  stroke-width: 2.5px;
+}
+
+html[data-theme='dark'] .tube-map__svg .app-route-preview-section {
+  stroke: #fb923c;
+}
+
+html[data-theme='dark'] .tube-map__svg #station_nodes [data-app-state='visited'] {
+  filter: drop-shadow(0 0 3px #fde047) drop-shadow(0 0 2px #fde047);
+}
+
 html[data-theme='dark'] .tube-map__svg .st {
   fill: #e2e8f0;
 }
 
 .tube-map__svg text[data-app-hovered='true'],
-.tube-map__svg text[data-app-selected='true'],
 .tube-map__svg text[data-app-station-id]:focus {
   font-weight: 400;
+}
+
+.tube-map__svg text[data-app-selected='true'] {
+  font-weight: 700 !important;
 }
 
 html[data-theme='dark'] .app-shell {

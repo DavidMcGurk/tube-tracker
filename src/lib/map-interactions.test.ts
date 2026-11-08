@@ -4,6 +4,7 @@ import {
   clampMapZoom,
   createStationLabelIndex,
   DEFAULT_MAP_ZOOM,
+  DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
   getActiveRoute,
   getRouteKey,
@@ -19,6 +20,7 @@ import {
 describe('map interaction helpers', () => {
   it('keeps map zoom within its supported range and uses the expected default', () => {
     expect(DEFAULT_MAP_ZOOM).toBe(4);
+    expect(DESKTOP_DEFAULT_MAP_ZOOM).toBe(2);
     expect(clampMapZoom(0.5)).toBe(MIN_MAP_ZOOM);
     expect(clampMapZoom(8)).toBe(MAX_MAP_ZOOM);
     expect(stepMapZoom(1, -0.25)).toBe(MIN_MAP_ZOOM);
@@ -61,6 +63,12 @@ describe('map interaction helpers', () => {
     expect(routeStationIds.size).toBe(first.path.length);
     expect(getRouteKey(first)).not.toBe(getRouteKey(alternative));
     expect(getRouteStationIds(alternative)).toEqual(new Set(alternative.path));
+    const recordedSection = first.segments[0];
+    expect(recordedSection).toBeDefined();
+    if (!recordedSection) throw new Error('Expected the route to include a section');
+    expect(getRouteStationIds(first, [recordedSection.id])).toEqual(new Set(
+      first.segments.slice(1).flatMap((section) => [section.from, section.to])
+    ));
     expect(getActiveRoute(alternative, first)).toBe(alternative);
     expect(getActiveRoute(null, first)).toBe(first);
   });

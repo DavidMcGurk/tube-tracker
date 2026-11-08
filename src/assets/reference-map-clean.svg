@@ -282,10 +282,10 @@ text {font-family:Arimo,Liberation Sans,Helvetica,Arial,sans-serif}
 			<rect x="-200" y="-200" width="3000" height="3000" style="fill:#fff" />
 			<g>
 				
-				<g class="zone1-background" style="fill:#ffffea;stroke:#eca;stroke-width:1">
+				<g class="zone1-background" style="fill:#e2e8f0;stroke:#94a3b8;stroke-width:1">
 					<use xlink:href="#zone1_base" />
 				</g>
-				<g font-size="20px" fill="#edc" class="b mid">
+				<g font-size="20px" fill="#edc" class="b mid zone1-label">
 					<text x="1065" y="700">Zone 1</text>
 					<text x="1320" y="820">Zone 1</text>
 					<text x="1510" y="420">Zone 1</text>

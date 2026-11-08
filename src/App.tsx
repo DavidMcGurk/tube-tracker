@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { findRoutes, getStationById, lines, stations } from './data/network';
+import { findRoutes, getStationById, lines, sections, stations } from './data/network';
 import { addRouteToProgress, EMPTY_PROGRESS, getStationState, routeIsAlreadyComplete, summariseProgress } from './lib/progress';
 import { loadProgress, loadTheme, saveProgress, saveTheme } from './lib/storage';
 import { getScrollPositionToCenterBounds } from './lib/map-view';
@@ -7,10 +7,10 @@ import {
   clampMapZoom,
   createStationLabelIndex,
   DEFAULT_MAP_ZOOM,
+  DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
   getActiveRoute,
   getRouteKey,
-  getRouteStationIds,
   hasAlternativeRoutes,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
@@ -66,7 +66,7 @@ interface MapInspection {
   details: string;
 }
 
-const mapViewStorageKey = 'tube-tracker-map-view';
+const mapViewStorageKey = 'tube-tracker-map-view-v2';
 
 function readMapViewState(): MapViewState | null {
   try {
@@ -205,6 +205,206 @@ function ThemeIcon({ resolvedTheme }: { resolvedTheme: 'light' | 'dark' }) {
   );
 }
 
+interface RoutePathSample {
+  length: number;
+  x: number;
+  y: number;
+}
+
+interface RoutePathGeometry {
+  path: SVGPathElement;
+  samples: RoutePathSample[];
+}
+
+interface ClosestRoutePoint extends RoutePathSample {
+  distance: number;
+}
+
+const routePathClassAliases: Record<string, string> = {
+  hammersmith_city: 'hnc',
+  waterloo_city: 'wnc'
+};
+const maximumPathGap = 12;
+
+function getRoutePathGeometries(svg: SVGSVGElement, lineIds: readonly string[]) {
+  const geometries = new Map<string, RoutePathGeometry[]>();
+  const svgMatrix = svg.getScreenCTM();
+  if (!svgMatrix) return geometries;
+  const screenToSvg = svgMatrix.inverse();
+
+  for (const lineId of new Set(lineIds)) {
+    const pathClass = routePathClassAliases[lineId] ?? lineId;
+    const paths = lineId === 'interchange'
+      ? svg.querySelectorAll<SVGPathElement>('#station_nodes #Bank_Monument_hub path')
+      : svg.querySelectorAll<SVGPathElement>(
+        `#routes .s${pathClass} path, #routes path.s${pathClass}`
+      );
+    const pathGeometries: RoutePathGeometry[] = [];
+
+    paths.forEach((path) => {
+      const totalLength = path.getTotalLength();
+      if (totalLength <= 0) return;
+      const pathToScreen = path.getScreenCTM();
+      if (!pathToScreen) return;
+
+      const samples: RoutePathSample[] = [];
+      const sampleStep = 2.5;
+      for (let length = 0; length < totalLength; length += sampleStep) {
+        const point = path.getPointAtLength(length).matrixTransform(pathToScreen).matrixTransform(screenToSvg);
+        samples.push({ length, x: point.x, y: point.y });
+      }
+      const finalPoint = path.getPointAtLength(totalLength).matrixTransform(pathToScreen).matrixTransform(screenToSvg);
+      samples.push({ length: totalLength, x: finalPoint.x, y: finalPoint.y });
+      pathGeometries.push({ path, samples });
+    });
+
+    geometries.set(lineId, pathGeometries);
+  }
+  return geometries;
+}
+
+function closestPointOnRoutePath(geometry: RoutePathGeometry, positions: readonly { x: number; y: number }[]) {
+  let closest: ClosestRoutePoint | null = null;
+  for (const sample of geometry.samples) {
+    for (const position of positions) {
+      const distance = Math.hypot(sample.x - position.x, sample.y - position.y);
+      if (!closest || distance < closest.distance) closest = { ...sample, distance };
+    }
+  }
+  return closest;
+}
+
+function updateSectionHighlightLayer(
+  svg: SVGSVGElement,
+  layerId: string,
+  className: string,
+  sectionIds: readonly string[]
+) {
+  const routeGroup = svg.querySelector<SVGGElement>('#routes');
+  if (!routeGroup) return;
+
+  let layer = svg.querySelector<SVGGElement>(`#${layerId}`);
+  if (!layer) {
+    layer = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
+    layer.id = layerId;
+    layer.setAttribute('aria-hidden', 'true');
+    const insertBefore = layerId === 'app-route-preview-sections'
+      ? svg.querySelector('#app-travelled-sections') ?? routeGroup
+      : routeGroup;
+    routeGroup.parentNode?.insertBefore(layer, insertBefore);
+  }
+  layer.replaceChildren();
+  const colorLayer = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
+  layer.appendChild(colorLayer);
+
+  const svgMatrix = svg.getScreenCTM();
+  if (!svgMatrix || sectionIds.length === 0) return;
+
+  const toSvgCoordinates = svgMatrix.inverse();
+  const stationPositions = new Map<string, { x: number; y: number }[]>();
+  const stationMarkers = [...svg.querySelectorAll<SVGElement>('#station_nodes use[id]')];
+  for (const marker of stationMarkers) {
+    const station = getMarkerStation(marker);
+    if (!station) continue;
+
+    const bounds = marker.getBoundingClientRect();
+    const point = svg.createSVGPoint();
+    point.x = bounds.left + bounds.width / 2;
+    point.y = bounds.top + bounds.height / 2;
+    const position = point.matrixTransform(toSvgCoordinates);
+    const positions = stationPositions.get(station.id) ?? [];
+    positions.push({ x: position.x, y: position.y });
+    stationPositions.set(station.id, positions);
+  }
+
+  const requestedSections = sections.filter((section) => sectionIds.includes(section.id));
+  const pathsByLine = getRoutePathGeometries(svg, requestedSections.map((section) => section.lineId));
+  const maximumMarkerOffset = 32;
+
+  for (const section of requestedSections) {
+    if (section.lineId === 'interchange') {
+      const interchangePath = pathsByLine.get(section.lineId)?.[0];
+      if (!interchangePath || interchangePath.samples.length < 2) {
+        console.warn(`Unable to show map geometry for interchange section "${section.id}"`);
+        continue;
+      }
+
+      const pathData = interchangePath.samples.map((point, index) =>
+        `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
+      ).join(' ');
+      const path = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', className);
+      path.setAttribute('data-app-section-id', section.id);
+      path.setAttribute('d', pathData);
+      colorLayer.appendChild(path);
+      continue;
+    }
+
+    const from = stationPositions.get(section.from);
+    const to = stationPositions.get(section.to);
+    if (!from?.length || !to?.length) {
+      console.warn(`Unable to show section "${section.id}" because a station marker is missing`);
+      continue;
+    }
+
+    let bestPath: RoutePathGeometry | null = null;
+    let bestFrom: ClosestRoutePoint | null = null;
+    let bestTo: ClosestRoutePoint | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const geometry of pathsByLine.get(section.lineId) ?? []) {
+      let component: RoutePathSample[] = [];
+      const components: RoutePathSample[][] = [];
+      for (const sample of geometry.samples) {
+        const previous = component.at(-1);
+        if (previous && Math.hypot(sample.x - previous.x, sample.y - previous.y) > maximumPathGap) {
+          components.push(component);
+          component = [];
+        }
+        component.push(sample);
+      }
+      if (component.length > 0) components.push(component);
+
+      for (const samples of components) {
+        const continuousGeometry = { path: geometry.path, samples };
+        const routeFrom = closestPointOnRoutePath(continuousGeometry, from);
+        const routeTo = closestPointOnRoutePath(continuousGeometry, to);
+        if (!routeFrom || !routeTo
+          || routeFrom.distance > maximumMarkerOffset
+          || routeTo.distance > maximumMarkerOffset) continue;
+
+        const score = routeFrom.distance + routeTo.distance;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPath = continuousGeometry;
+          bestFrom = routeFrom;
+          bestTo = routeTo;
+        }
+      }
+    }
+
+    if (!bestPath || !bestFrom || !bestTo) {
+      console.warn(`Unable to follow map line geometry for section "${section.id}"`);
+      continue;
+    }
+
+    const startIndex = bestPath.samples.findIndex((sample) => sample.length === bestFrom.length);
+    const endIndex = bestPath.samples.findIndex((sample) => sample.length === bestTo.length);
+    const lowIndex = Math.min(startIndex, endIndex);
+    const highIndex = Math.max(startIndex, endIndex);
+    const tracedPoints = bestPath.samples.slice(lowIndex, highIndex + 1);
+    if (tracedPoints.length < 2) continue;
+    const pathData = tracedPoints.map((point, index) =>
+      `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
+    ).join(' ');
+
+    const path = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', className);
+    path.setAttribute('data-app-section-id', section.id);
+    path.setAttribute('d', pathData);
+    colorLayer.appendChild(path);
+  }
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabName>('map');
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
@@ -212,7 +412,9 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
   const [savedMapView] = useState(readMapViewState);
-  const initialMapZoom = savedMapView?.zoom ?? DEFAULT_MAP_ZOOM;
+  const isMobileViewport = window.matchMedia('(max-width: 640px)').matches;
+  const initialMapZoom = savedMapView?.zoom
+    ?? (isMobileViewport ? DEFAULT_MAP_ZOOM : DESKTOP_DEFAULT_MAP_ZOOM);
   const [mapZoom, setMapZoom] = useState(initialMapZoom);
   const [hoveredStationId, setHoveredStationId] = useState<string | null>(null);
   const [mapInspection, setMapInspection] = useState<MapInspection | null>(null);
@@ -319,8 +521,10 @@ function App() {
     svg.style.height = 'auto';
 
     const previousView = mapViewRef.current;
-    if (mapViewportRef.current !== viewport) {
-      if (!hasInitialMapViewRef.current && window.matchMedia('(max-width: 640px)').matches) {
+    const isFirstMapView = mapViewportRef.current !== viewport;
+    const shouldCenterDesktopMap = isFirstMapView && !hasInitialMapViewRef.current && !isMobileViewport;
+    if (isFirstMapView) {
+      if (!hasInitialMapViewRef.current && isMobileViewport) {
         const zoneOne = svg.querySelector<SVGGElement>('#bg .zone1-background');
         if (zoneOne) {
           const viewportBounds = viewport.getBoundingClientRect();
@@ -337,6 +541,9 @@ function App() {
           viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
           viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
         }
+      } else if (!hasInitialMapViewRef.current) {
+        viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
+        viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
       } else {
         viewport.scrollLeft = previousView.scrollLeft;
         viewport.scrollTop = previousView.scrollTop;
@@ -350,6 +557,14 @@ function App() {
     }
 
     mapViewRef.current = { zoom: mapZoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    if (shouldCenterDesktopMap) {
+      window.requestAnimationFrame(() => {
+        if (mapRef.current !== viewport || mapViewRef.current.zoom !== mapZoom) return;
+        viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
+        viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+        mapViewRef.current = { zoom: mapZoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+      });
+    }
   }, [activeTab, mapFullscreen, mapZoom, referenceMapSvg]);
 
   useEffect(() => {
@@ -423,6 +638,9 @@ function App() {
       const station = getMarkerStation(marker);
       if (station) attachStationInteraction(marker, station.id);
     }
+
+    updateSectionHighlightLayer(svg, 'app-travelled-sections', 'app-travelled-section', progress.travelledSegmentIDs);
+
     svg.querySelectorAll<SVGElement>('#station_nodes g[id]').forEach((marker) => {
       const station = getMarkerStation(marker);
       if (station) attachStationInteraction(marker, station.id);
@@ -454,16 +672,21 @@ function App() {
     return findRoutes(startId, endId, routeChooserOpen ? 30 : 2);
   }, [routeChooserOpen, selectedStationIds]);
   const activeRoute = getActiveRoute(selectedRoute, routePreview);
-  const routeStationIds = getRouteStationIds(activeRoute);
-
+  const completedSectionIds = useMemo(() => new Set(progress.travelledSegmentIDs), [progress.travelledSegmentIDs]);
+  const newRouteSections = useMemo(
+    () => activeRoute?.segments.filter((section) => !completedSectionIds.has(section.id)) ?? [],
+    [activeRoute, completedSectionIds]
+  );
   useEffect(() => {
     const svg = mapRef.current?.querySelector('svg');
     if (!svg) return;
-    svg.querySelectorAll<SVGElement>('[data-app-station-id]').forEach((element) => {
-      const stationId = element.getAttribute('data-app-station-id');
-      element.setAttribute('data-app-route', String(Boolean(stationId && routeStationIds.has(stationId))));
-    });
-  }, [activeRoute, referenceMapSvg]);
+    updateSectionHighlightLayer(
+      svg,
+      'app-route-preview-sections',
+      'app-route-preview-section',
+      newRouteSections.map((section) => section.id)
+    );
+  }, [activeRoute, activeTab, newRouteSections, referenceMapSvg]);
   const routeEndpoints = useMemo(() => {
     const [startId, endId] = selectedStationIds;
     if (!startId || !endId) return '';
@@ -706,7 +929,7 @@ function App() {
         </div>
       </header>
 
-      <nav className="mx-auto flex max-w-6xl gap-2 px-4 py-4">
+      <nav className="mx-auto flex w-full max-w-6xl gap-2 px-4 py-4">
         {(['map', 'stats', 'settings'] as TabName[]).map((tab) => (
           <button
             key={tab}
@@ -770,6 +993,22 @@ function App() {
                 >
                   <ThemeIcon resolvedTheme={resolvedTheme} />
                 </button>
+                <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Amber highlights show travelled sections and stations">
+                  <span className="relative inline-flex h-4 w-6 items-center" aria-hidden="true">
+                    <span className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded bg-amber-600 dark:bg-amber-400" />
+                    <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-700 bg-white dark:border-amber-400 dark:bg-slate-900" />
+                  </span>
+                  Travelled
+                </span>
+                {newRouteSections.length > 0 && (
+                  <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Orange highlights show new sections in the selected route">
+                    <span className="relative inline-flex h-4 w-6 items-center" aria-hidden="true">
+                      <span className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded bg-orange-500 dark:bg-orange-400" />
+                      <span className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-orange-600 bg-white dark:border-orange-400 dark:bg-slate-900" />
+                    </span>
+                    New route
+                  </span>
+                )}
               </div>
             </div>
 
@@ -898,24 +1137,55 @@ function App() {
           <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <h3 className="mb-4 text-lg font-semibold">Line progress</h3>
             <div className="space-y-3">
-              {sortedLineProgress.map((line) => (
-                <div key={line.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: lineLookup[line.id]?.color ?? '#94a3b8' }} />
-                      <span className="font-medium">{lineLookup[line.id]?.name ?? line.id}</span>
+              {sortedLineProgress.map((line) => {
+                const lineColor = lineLookup[line.id]?.color ?? '#94a3b8';
+                return (
+                  <div key={line.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: lineColor }} />
+                        <span className="font-medium">{lineLookup[line.id]?.name ?? line.id}</span>
+                      </div>
                     </div>
-                    <span className="text-sm text-slate-500">{line.completedSections}/{line.totalSections} sections</span>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Line travelled</span>
+                          <span>{line.completion.toFixed(1)}% · {(line.travelledDistance / 1000).toFixed(1)} / {(line.totalDistance / 1000).toFixed(1)} km</span>
+                        </div>
+                        <div
+                          className="flex h-3 overflow-hidden rounded-full border border-slate-400 bg-slate-200 dark:border-slate-500 dark:bg-slate-700"
+                          role="progressbar"
+                          aria-label={`${line.name} distance travelled`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={line.completion}
+                        >
+                          <div className="h-full" style={{ width: `${line.completion}%`, backgroundColor: lineColor }} />
+                          <div className="h-full flex-1 bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Stations visited</span>
+                          <span>{line.stationCompletion.toFixed(1)}% · {line.visitedStations} / {line.totalStations}</span>
+                        </div>
+                        <div
+                          className="flex h-3 overflow-hidden rounded-full border border-slate-400 bg-slate-200 dark:border-slate-500 dark:bg-slate-700"
+                          role="progressbar"
+                          aria-label={`${line.name} stations visited`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={line.stationCompletion}
+                        >
+                          <div className="h-full" style={{ width: `${line.stationCompletion}%`, backgroundColor: lineColor }} />
+                          <div className="h-full flex-1 bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, line.completion)}%` }} />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                    <span>{line.completion.toFixed(0)}% complete</span>
-                    <span>{(line.travelledDistance / 1000).toFixed(1)} / {(line.totalDistance / 1000).toFixed(1)} km</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </main>

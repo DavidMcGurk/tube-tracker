@@ -1,4 +1,4 @@
-import { getStationById, lines, sections } from '../data/network';
+import { getStationById, lines, sections, stations } from '../data/network';
 import type { NetworkSummary, Progress, RouteResult } from './types';
 
 export const EMPTY_PROGRESS: Progress = {
@@ -51,14 +51,23 @@ export function summariseProgress(progress: Progress): NetworkSummary {
     const travelledLineDistance = matches.reduce((sum, segment) => (travelledSet.has(segment.id) ? sum + segment.distance : sum), 0);
     const totalLineDistance = matches.reduce((sum, segment) => sum + segment.distance, 0);
     const completion = totalLineDistance > 0 ? (travelledLineDistance / totalLineDistance) * 100 : 0;
+    const lineStations = stations.filter((station) => station.lines.includes(line.id));
+    const visitedStationIds = new Set(
+      completedSections.flatMap((segment) => [segment.from, segment.to])
+    );
+    const visitedStations = lineStations.filter((station) => visitedStationIds.has(station.id)).length;
+    const stationCompletion = lineStations.length > 0 ? (visitedStations / lineStations.length) * 100 : 0;
     lineProgress.push({
       id: line.id,
       name: line.name,
       completion,
+      stationCompletion,
       travelledDistance: travelledLineDistance,
       totalDistance: totalLineDistance,
       completedSections: completedSections.length,
       totalSections: matches.length,
+      visitedStations,
+      totalStations: lineStations.length,
       complete: matches.length > 0 && completedSections.length === matches.length
     });
   }

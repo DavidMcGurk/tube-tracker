@@ -44,10 +44,13 @@ export interface NetworkSummary {
     id: string;
     name: string;
     completion: number;
+    stationCompletion: number;
     travelledDistance: number;
     totalDistance: number;
     completedSections: number;
     totalSections: number;
+    visitedStations: number;
+    totalStations: number;
     complete: boolean;
   }>;
 }
