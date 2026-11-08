@@ -285,11 +285,19 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   fill: #15803d !important;
 }
 
+.tube-map__svg text[data-app-state='visited'] {
+  fill: #15803d !important;
+}
+
 .tube-map__svg text[data-app-state='changed'] {
   fill: #b45309 !important;
 }
 
 .tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='entered'] tspan {
+  fill: #15803d !important;
+}
+
+.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='visited'] tspan {
   fill: #15803d !important;
 }
 

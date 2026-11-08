@@ -720,6 +720,12 @@ function App() {
     if (activeRoute) void commitRoute(activeRoute);
   };
 
+  const handleClearSelection = () => {
+    setSelectedStationIds([]);
+    setSelectedRoute(null);
+    setRouteChooserOpen(false);
+  };
+
   const resetProgress = async () => {
     setProgress(EMPTY_PROGRESS);
     await saveProgress(EMPTY_PROGRESS);
@@ -1067,9 +1073,14 @@ function App() {
                       </span>
                     )}
                   </p>
-                  <button onClick={handleRecordRoute} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
-                    {routeIsAlreadyComplete(progress, activeRoute ?? routePreview) ? 'Already explored' : 'Record route'}
-                  </button>
+                  <div className="route-buttons flex flex-wrap gap-2">
+                    <button onClick={handleClearSelection} className="min-h-11 rounded-full border border-slate-300 px-4 py-2 text-sm dark:border-slate-600">
+                      Clear selection
+                    </button>
+                    <button onClick={handleRecordRoute} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
+                      {routeIsAlreadyComplete(progress, activeRoute ?? routePreview) ? 'Already explored' : 'Record route'}
+                    </button>
+                  </div>
                 </div>
                 {routeChooserOpen && routeOptions.length > 1 && (
                   <div className="route-options space-y-2" role="group" aria-label="Choose the route you travelled">
