@@ -1,5 +1,17 @@
 import type { ProgressStyle } from '../lib/types';
 
+/** The legend's sample lines use a real line colour (the Central line's red), so they read as lines on the map. */
+const SAMPLE_LINE_COLOUR = '#DC241F';
+
+/** A short line at the given width, as the map draws travelled (bold) or untravelled (thin) track. */
+function LineSwatch({ width }: { width: number }) {
+  return (
+    <svg className="h-3.5 w-[1.375rem] shrink-0" viewBox="0 0 22 14" aria-hidden="true">
+      <path d="M3 7H19" stroke={SAMPLE_LINE_COLOUR} strokeWidth={width} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** A small picture of how travelled track looks on the map in the given style. */
 export function TravelledSwatch({ progressStyle }: { progressStyle: ProgressStyle }) {
   if (progressStyle === 'band') {
@@ -12,13 +24,13 @@ export function TravelledSwatch({ progressStyle }: { progressStyle: ProgressStyl
       </span>
     );
   }
-  // A thin untravelled line becoming a full-width travelled one.
-  return (
-    <svg className="h-3 w-7 shrink-0 text-slate-700 dark:text-slate-200" viewBox="0 0 28 12" aria-hidden="true">
-      <path d="M1 6H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M13 6H26" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
-    </svg>
-  );
+  // Travelled track is drawn bold.
+  return <LineSwatch width={5.5} />;
+}
+
+/** Track not yet travelled, drawn thin (the bold-lines style only). */
+export function UntravelledSwatch() {
+  return <LineSwatch width={2} />;
 }
 
 /** A small picture of the selected route: an orange dashed path with an edge, drawn over the lines. */
