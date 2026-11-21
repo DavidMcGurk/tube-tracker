@@ -3,6 +3,9 @@ import { loadTheme, saveTheme } from '../lib/storage';
 import type { ResolvedTheme, Theme } from '../lib/types';
 import { PREFERS_DARK_QUERY, useMediaQuery } from './useMediaQuery';
 
+/** The header's colour in each theme, so the browser toolbar and iOS status bar blend into it. */
+const THEME_COLORS: Record<ResolvedTheme, string> = { light: '#fcfdfe', dark: '#0c1327' };
+
 /** Follows the system theme until the user picks one; the choice is persisted only when the user makes it. */
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>('system');
@@ -22,6 +25,8 @@ export function useTheme() {
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
+    // index.html has one theme-color per system scheme; both follow the app's theme, which the user can override.
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute('content', THEME_COLORS[resolvedTheme]));
   }, [resolvedTheme]);
 
   const toggleTheme = useCallback(() => {

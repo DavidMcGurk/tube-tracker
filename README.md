@@ -44,6 +44,14 @@ npm run build
 npm test
 ```
 
+## App icons
+
+The logo is defined once in `scripts/generate-icons.mjs`. The script writes `public/favicon.svg` and renders the PNG icons (manifest, maskable and Apple touch icon) to `public/` using the locally installed Chrome. Run it after changing the artwork and commit the results:
+
+```bash
+npm run icons
+```
+
 ## Notes
 
 - The app stores progress locally in IndexedDB and stays functional offline after the first successful load.
