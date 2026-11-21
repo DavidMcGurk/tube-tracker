@@ -56,12 +56,18 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
   });
 
   const inspectedStation = inspectedStationId ? getStationById(inspectedStationId) : undefined;
+  const canClear = selectedStationIds.length > 0 || inspectedStationId !== null;
+  const handleClear = () => {
+    selection.clearSelection();
+    setInspectedStationId(null);
+  };
 
   return (
     <main className={`map-main mx-auto max-w-6xl px-4 pb-10${fullscreen ? ' is-fullscreen' : ''}`}>
       <div className="map-card rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <MapToolbar
-          onClear={selection.clearSelection}
+          canClear={canClear}
+          onClear={handleClear}
           zoom={viewport.zoom}
           canZoomIn={viewport.canZoomIn}
           canZoomOut={viewport.canZoomOut}
@@ -111,7 +117,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
             chooserOpen={selection.chooserOpen}
             progress={progress}
             onRecord={() => onRecordRoute(activeRoute)}
-            onClear={selection.clearSelection}
+            onClear={handleClear}
             onChooseRoute={selection.chooseRoute}
             onToggleChooser={selection.toggleChooser}
           />

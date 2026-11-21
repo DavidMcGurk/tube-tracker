@@ -147,3 +147,18 @@ test('double-clicking a station shows its details and keeps the current selectio
   await expect(page.locator('.map-inspection-panel')).toContainText('Bank');
   await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'true');
 });
+
+test('the Clear button stands out only when there is something to clear', async ({ page }, testInfo) => {
+  await openMap(page);
+  const clear = page.locator('.map-toolbar').getByRole('button', { name: /clear|nothing to clear/i });
+  const weight = () => clear.evaluate((element) => Number(getComputedStyle(element).fontWeight));
+  await expect(clear).toBeDisabled();
+  expect(await weight()).toBeLessThan(600);
+
+  await selectStation(page, testInfo, 'bank');
+  await expect(clear).toBeEnabled();
+  expect(await weight()).toBeGreaterThanOrEqual(600);
+  await clear.click();
+  await expect(clear).toBeDisabled();
+  await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'false');
+});
