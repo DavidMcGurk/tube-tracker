@@ -36,11 +36,10 @@
   --tt-preview-edge: #fff;
 
   /*
-   * Stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you changed.
-   * Stations only passed through stay unmarked: the travelled line already shows them.
+   * Names of stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you
+   * changed. Only the names are coloured, not the station markers. Stations only passed through stay unmarked: the
+   * travelled line already shows them.
    */
-  --tt-station-entered: #16a34a;
-  --tt-station-changed: #7c3aed;
   --tt-label-entered: #166534;
   --tt-label-changed: #6d28d9;
   /* Line colours that need a lighter stand-in on dark backgrounds (also used by the statistics bars). */
@@ -63,8 +62,6 @@ html[data-theme='dark'] {
   --tt-walked: #94a3b8;
   --tt-preview: #fb923c;
   --tt-preview-edge: #0f172a;
-  --tt-station-entered: #4ade80;
-  --tt-station-changed: #a78bfa;
   --tt-line-northern: #e2e8f0;
   --tt-label-default: #fff;
   --tt-label-halo: #0f172a;
@@ -519,14 +516,6 @@ html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
 }
 
 /* ---------------------------------------------------------------- Map SVG: station markers and highlights */
-
-.tube-map__svg #station_nodes [data-app-state='entered'] {
-  filter: drop-shadow(0 0 3px var(--tt-station-entered)) drop-shadow(0 0 2px var(--tt-station-entered));
-}
-
-.tube-map__svg #station_nodes [data-app-state='changed'] {
-  filter: drop-shadow(0 0 3px var(--tt-station-changed)) drop-shadow(0 0 2px var(--tt-station-changed));
-}
 
 /*
  * Travelled track, in one of two styles (Settings → Map), chosen by data-progress-style on the app shell:
