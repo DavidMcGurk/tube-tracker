@@ -12,19 +12,19 @@ Tube Tracker is a Progressive Web App for tracking progress across London's publ
 - Tailwind CSS
 - IndexedDB via Dexie
 - Service Worker / PWA support
-- Vitest for route and progress validation
+- Vitest (unit) and Playwright (end-to-end, across phone, tablet and desktop viewports)
 
 ## Project structure
 
-- `src/data/network.ts` — configured station graph and public network exports
-- `src/data/station.ts`, `src/data/track-section.ts`, `src/data/walk-link.ts`, `src/data/transit-network.ts` — graph entities, validation and connections
-- `src/data/route-planner.ts` — journey planning (changes first, then distance); `src/data/walk-links.ts` and `src/data/line-services.ts` hold the walking interchanges and Northern line services
-- `src/data/tfl-network-data.ts` — checked-in TfL route-sequence data for the mapped network
-- `src/lib/progress.ts` — progress semantics, distance calculations, and statistics
-- `src/lib/storage.ts` — local persistence and theme storage
-- `src/App.tsx` — map, stats, and settings interface
+- `src/App.tsx` — composes the tabs, theme, progress and route selection
+- `src/components/` — `MapView` (map, toolbar, route bar), `StatsView`, `SettingsView`, `InstallPrompt` and smaller pieces
+- `src/hooks/` — `useProgress` (load/save with error handling), `useRouteSelection`, `useTheme`, `useInstallPrompt`, `useMediaQuery`
+- `src/map/` — everything that works on the inline SVG: binding stations to markers and labels (`station-binding`, `station-index`, `station-anchors`), tracing highlights along the drawn lines (`section-geometry`, `highlight-layer`), line-label backgrounds, and the viewport, gesture and pinch-zoom hooks
+- `src/data/` — the network: `tfl-network-data.ts` (TfL stations and line sections), `walk-links.ts` (walking interchanges), `line-services.ts` (Northern line through-services), entities (`station`, `track-section`, `walk-link`), `transit-network.ts` and `route-planner.ts` (journey planning: changes first, then distance)
+- `src/lib/` — progress and statistics (`progress.ts`), persistence (`storage.ts`), route text (`route-format.ts`), zoom maths (`map-zoom.ts`), install-prompt logic
 - `src/assets/reference-map-clean.svg` — the reference map SVG, embedded directly so its own station labels are interactive
-- `vite.config.ts` — Vite, Tailwind, and PWA configuration
+- `e2e/` — Playwright specs: a viewport sweep with screenshots, map health checks (every section drawable, no geometry work on hover), interactions, pinch zoom and the install prompt
+- `vite.config.ts` — Vite, Tailwind, PWA and Vitest configuration
 
 ## Local development
 
@@ -42,8 +42,11 @@ npm run build
 ## Testing
 
 ```bash
-npm test
+npm test        # unit tests (Vitest)
+npm run e2e     # end-to-end tests (Playwright) across phone, tablet, laptop and widescreen viewports
 ```
+
+The end-to-end tests use the locally installed Chrome, plus Playwright's WebKit build for the iPhone profile (`npx playwright install webkit`). Screenshots of every viewport, in light and dark mode, are written to `test-results/screens/`.
 
 ## App icons
 
