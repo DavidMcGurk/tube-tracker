@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
+import { InstallPrompt } from './components/InstallPrompt';
 import { MapView } from './components/MapView';
 import { ResetDialog } from './components/ResetDialog';
 import { SettingsView } from './components/SettingsView';
 import { StatsView } from './components/StatsView';
 import { ThemeToggleButton } from './components/ThemeToggleButton';
+import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useProgress } from './hooks/useProgress';
 import { useRouteSelection } from './hooks/useRouteSelection';
 import { useTheme } from './hooks/useTheme';
@@ -24,6 +26,8 @@ function App() {
   const { progress, error: progressError, dismissError, recordRoute, resetProgress } = useProgress();
   const selection = useRouteSelection();
   const { clearSelection, closeChooser } = selection;
+  const install = useInstallPrompt();
+  const routeActionsShowing = activeTab === 'map' && selection.activeRoute !== null;
 
   const handleRecordRoute = useCallback(async (route: RouteResult) => {
     const outcome = await recordRoute(route);
@@ -80,8 +84,9 @@ function App() {
         />
       )}
       {activeTab === 'stats' && <StatsView progress={progress} />}
-      {activeTab === 'settings' && <SettingsView onResetRequest={() => setResetConfirmationOpen(true)} />}
+      {activeTab === 'settings' && <SettingsView onResetRequest={() => setResetConfirmationOpen(true)} install={install} />}
       {resetConfirmationOpen && <ResetDialog onCancel={handleCancelReset} onConfirm={() => void handleConfirmReset()} />}
+      <InstallPrompt install={install} suppressed={routeActionsShowing || resetConfirmationOpen} />
     </div>
   );
 }

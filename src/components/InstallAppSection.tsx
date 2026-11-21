@@ -1,0 +1,41 @@
+import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import { IosInstallSteps, isIosPlatform } from './InstallSteps';
+
+/** Settings fallback for installing the app, available even after the pop-up was dismissed. */
+export function InstallAppSection({ install }: { install: InstallPromptController }) {
+  if (install.standalone) return null;
+  const ios = isIosPlatform(install.platform);
+
+  let body;
+  if (install.canInstallNatively) {
+    body = (
+      <button
+        onClick={() => void install.install()}
+        className="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+      >
+        Install app
+      </button>
+    );
+  } else if (ios) {
+    body = <IosInstallSteps platform={install.platform} />;
+  } else if (install.installed) {
+    body = <p className="text-sm text-slate-600 dark:text-slate-300">Tube Tracker is installed on this device. Open it from your home screen or app list.</p>;
+  } else {
+    body = (
+      <p className="text-sm text-slate-600 dark:text-slate-300">
+        Look for <strong>Install app</strong>, <strong>Add to Home screen</strong> or <strong>Add to Dock</strong> in your browser’s menu.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold">Install app</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+        Add Tube Tracker to your home screen to open it full screen and use it offline.
+        {ios && ' It also keeps your progress safe: Safari can clear a website’s saved data after 7 days without a visit.'}
+      </p>
+      <div className="mt-3">{body}</div>
+    </div>
+  );
+}
