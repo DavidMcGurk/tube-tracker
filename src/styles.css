@@ -40,6 +40,15 @@ button {
   cursor: pointer;
 }
 
+.app-alert {
+  position: fixed;
+  z-index: 150;
+  top: calc(0.75rem + env(safe-area-inset-top));
+  left: 50%;
+  width: min(calc(100% - 2rem), 40rem);
+  transform: translateX(-50%);
+}
+
 .reset-confirmation-backdrop {
   position: fixed;
   z-index: 200;
@@ -102,7 +111,7 @@ button {
     height: 100%;
   }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-card > .mb-3,
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-toolbar,
   .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .route-action-bar {
     flex: none;
   }
@@ -204,7 +213,7 @@ button {
   border-radius: 0;
 }
 
-.app-shell[data-map-fullscreen='true'] .map-card > .mb-3 {
+.app-shell[data-map-fullscreen='true'] .map-toolbar {
   flex: none;
 }
 

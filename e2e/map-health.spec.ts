@@ -55,7 +55,6 @@ test('every travelled track section can be drawn on the map', async ({ page }) =
 });
 
 test('hovering a station does no route-geometry work', async ({ page }) => {
-  test.fail(true, 'Phase 1 step 5 removes geometry work from hover; until then every hover re-samples the route paths');
   await page.addInitScript(() => {
     const counter = window as unknown as { __pointAtLengthCalls: number };
     counter.__pointAtLengthCalls = 0;

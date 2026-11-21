@@ -1,10 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import { EMPTY_PROGRESS } from './progress';
+import { sanitizeProgress } from './progress';
 import type { Progress, Theme } from './types';
 
 interface ProgressRecord {
   id: 'current';
-  value: Progress;
+  /** Validated on load: older or corrupted records may not match the current Progress shape. */
+  value: unknown;
 }
 
 interface ThemeSettingRecord {
@@ -31,7 +32,7 @@ const db = new TubeTrackerDB();
 
 export async function loadProgress(): Promise<Progress> {
   const record = await db.progress.get('current');
-  return record?.value ?? EMPTY_PROGRESS;
+  return sanitizeProgress(record?.value);
 }
 
 export async function saveProgress(progress: Progress) {

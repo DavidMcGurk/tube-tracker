@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findRoute, lines, sections } from '../data/network';
-import { addRouteToProgress, EMPTY_PROGRESS, getStationState, routeIsAlreadyComplete, summariseProgress } from './progress';
+import { addRouteToProgress, EMPTY_PROGRESS, getStationState, routeIsAlreadyComplete, sanitizeProgress, summariseProgress } from './progress';
 
 describe('Tube Tracker logic', () => {
   it('finds a route between stations', () => {
@@ -102,5 +102,32 @@ describe('Tube Tracker logic', () => {
 
     expect(comparisons.some((line) => line.completion > line.stationCompletion)).toBe(true);
     expect(comparisons.some((line) => line.stationCompletion > line.completion)).toBe(true);
+  });
+});
+
+describe('sanitizeProgress', () => {
+  it('accepts a valid record unchanged', () => {
+    const route = findRoute('paddington', 'waterloo')!;
+    const progress = addRouteToProgress(EMPTY_PROGRESS, route, 'paddington', 'waterloo');
+    expect(sanitizeProgress(progress)).toEqual(progress);
+  });
+
+  it('falls back to empty progress for missing or malformed records', () => {
+    expect(sanitizeProgress(undefined)).toEqual(EMPTY_PROGRESS);
+    expect(sanitizeProgress('nonsense')).toEqual(EMPTY_PROGRESS);
+    expect(sanitizeProgress({ travelledSegmentIDs: 'bakerloo_x' })).toEqual(EMPTY_PROGRESS);
+  });
+
+  it('drops unknown ids, non-strings and duplicates', () => {
+    const sectionId = sections[0]!.id;
+    expect(sanitizeProgress({
+      travelledSegmentIDs: [sectionId, sectionId, 'removed_section', 42],
+      stationsEnteredOrExitedIDs: ['bank', 'atlantis'],
+      stationsChangedAtIDs: [null, 'victoria']
+    })).toEqual({
+      travelledSegmentIDs: [sectionId],
+      stationsEnteredOrExitedIDs: ['bank'],
+      stationsChangedAtIDs: ['victoria']
+    });
   });
 });

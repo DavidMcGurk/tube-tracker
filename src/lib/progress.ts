@@ -1,4 +1,4 @@
-import { getSectionById, lines, sections, stations } from '../data/network';
+import { getSectionById, getStationById, lines, sections, stations } from '../data/network';
 import type { LineProgress, NetworkSummary, Progress, RouteResult, StationState } from './types';
 
 export const EMPTY_PROGRESS: Progress = {
@@ -6,6 +6,26 @@ export const EMPTY_PROGRESS: Progress = {
   stationsEnteredOrExitedIDs: [],
   stationsChangedAtIDs: []
 };
+
+function knownIds(value: unknown, isKnown: (id: string) => boolean): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is string => typeof id === 'string' && isKnown(id)))];
+}
+
+/**
+ * Validates a stored progress record: tolerates missing or malformed fields and drops ids that no longer exist in
+ * the network data (e.g. after a data update), so stale storage can never crash the app.
+ */
+export function sanitizeProgress(value: unknown): Progress {
+  if (typeof value !== 'object' || value === null) return EMPTY_PROGRESS;
+  const record = value as Partial<Record<keyof Progress, unknown>>;
+  const isStation = (id: string) => getStationById(id) !== undefined;
+  return {
+    travelledSegmentIDs: knownIds(record.travelledSegmentIDs, (id) => getSectionById(id) !== undefined),
+    stationsEnteredOrExitedIDs: knownIds(record.stationsEnteredOrExitedIDs, isStation),
+    stationsChangedAtIDs: knownIds(record.stationsChangedAtIDs, isStation)
+  };
+}
 
 /** Set-based view of a progress record so per-station lookups are O(1). */
 export interface ProgressIndex {
