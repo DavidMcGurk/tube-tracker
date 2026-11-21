@@ -55,6 +55,7 @@ html[data-theme='dark'] {
   --tt-label-entered: #4ade80;
   --tt-label-changed: #fbbf24;
   --tt-label-hover: #93c5fd;
+  --tt-map-background: #0f172a;
 }
 
 /* ---------------------------------------------------------------- App shell */

@@ -132,3 +132,24 @@ for (const colorScheme of ['light', 'dark'] as const) {
     })).toEqual(['rgb(196, 137, 38) 700', 'rgb(94, 104, 103) 700', 'rgb(119, 119, 119) 700']);
   });
 }
+
+test('station tap targets do not overlap their neighbours', async ({ page }) => {
+  await openMap(page);
+  const overlaps = await page.evaluate(() => {
+    const circles = [...document.querySelectorAll('#app-station-hit-areas circle')].map((circle) => ({
+      stationId: circle.getAttribute('data-app-station-id'),
+      x: Number(circle.getAttribute('cx')),
+      y: Number(circle.getAttribute('cy')),
+      r: Number(circle.getAttribute('r'))
+    }));
+    const found: string[] = [];
+    circles.forEach((a, i) => circles.slice(i + 1).forEach((b) => {
+      const gap = Math.hypot(a.x - b.x, a.y - b.y);
+      // Only stations further apart than twice the minimum radius can be kept fully apart.
+      if (a.stationId !== b.stationId && gap >= 12 && gap < a.r + b.r - 0.01) found.push(`${a.stationId}/${b.stationId}`);
+    }));
+    return { count: circles.length, found };
+  });
+  expect(overlaps.count).toBeGreaterThan(400);
+  expect(overlaps.found).toEqual([]);
+});

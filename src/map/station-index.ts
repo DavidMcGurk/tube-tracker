@@ -6,7 +6,9 @@ import { measureStationAnchors } from './station-anchors';
 import { getClosestStationId, getMarkerStation, STATION_MARKER_SELECTOR, stationsByMapLabel } from './station-binding';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const HIT_AREA_RADIUS = 18;
+/** Tap targets are this generous, but never overlap a neighbouring station's (so a near miss can't pick the wrong one). */
+const MAX_HIT_AREA_RADIUS = 18;
+const MIN_HIT_AREA_RADIUS = 6;
 
 export type StationFlag = 'data-app-selected' | 'data-app-hovered';
 
@@ -17,12 +19,12 @@ export interface StationIndex {
 
 const stationIndexCache = new WeakMap<SVGSVGElement, StationIndex>();
 
-function createHitArea(document: Document, x: number, y: number, stationId: string) {
+function createHitArea(document: Document, x: number, y: number, radius: number, stationId: string) {
   const hitArea = document.createElementNS(SVG_NS, 'circle');
   hitArea.setAttribute('class', 'app-station-hit-area');
   hitArea.setAttribute('cx', String(x));
   hitArea.setAttribute('cy', String(y));
-  hitArea.setAttribute('r', String(HIT_AREA_RADIUS));
+  hitArea.setAttribute('r', String(radius));
   hitArea.setAttribute('data-app-station-id', stationId);
   return hitArea;
 }
@@ -42,11 +44,15 @@ function addHitAreas(svg: SVGSVGElement) {
   const stationNodesMatrix = stationNodes.getScreenCTM();
   if (!anchors || !svgMatrix || !stationNodesMatrix) return;
   const svgToStationNodes = stationNodesMatrix.inverse().multiply(svgMatrix);
-  for (const [stationId, points] of anchors) {
-    for (const point of points) {
-      const local = new DOMPoint(point.x, point.y).matrixTransform(svgToStationNodes);
-      hitAreaGroup.appendChild(createHitArea(svg.ownerDocument, local.x, local.y, stationId));
+  const allPoints = [...anchors].flatMap(([stationId, points]) => points.map((point) => ({ stationId, point })));
+  for (const { stationId, point } of allPoints) {
+    let nearestOther = Infinity;
+    for (const other of allPoints) {
+      if (other.stationId !== stationId) nearestOther = Math.min(nearestOther, Math.hypot(other.point.x - point.x, other.point.y - point.y));
     }
+    const radius = Math.max(MIN_HIT_AREA_RADIUS, Math.min(MAX_HIT_AREA_RADIUS, nearestOther / 2));
+    const local = new DOMPoint(point.x, point.y).matrixTransform(svgToStationNodes);
+    hitAreaGroup.appendChild(createHitArea(svg.ownerDocument, local.x, local.y, radius, stationId));
   }
 }
 

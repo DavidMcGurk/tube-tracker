@@ -99,7 +99,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
 
         <div
           ref={viewportRef}
-          className="tube-map-viewport overflow-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700"
+          className="tube-map-viewport overflow-auto rounded-2xl border border-slate-200 bg-(--tt-map-background) dark:border-slate-700"
           {...gestureHandlers}
           onScroll={viewport.handleScroll}
           aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan."
