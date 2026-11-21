@@ -1,3 +1,5 @@
+import type { RefObject } from 'react';
+import { formatMapZoom } from '../lib/map-zoom';
 import type { ResolvedTheme } from '../lib/types';
 import { EnterFullscreenIcon, ExitFullscreenIcon } from './icons';
 import { ThemeToggleButton } from './ThemeToggleButton';
@@ -7,6 +9,8 @@ interface MapToolbarProps {
   canClear: boolean;
   onClear: () => void;
   zoom: number;
+  /** The zoom readout, which pinch gestures update directly while they run. */
+  zoomReadoutRef: RefObject<HTMLSpanElement | null>;
   canZoomIn: boolean;
   canZoomOut: boolean;
   onZoomIn: () => void;
@@ -19,6 +23,7 @@ interface MapToolbarProps {
 }
 
 const toolbarButton = 'min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700';
+const zoomButton = `${toolbarButton} min-w-11 flex-none disabled:opacity-40`;
 const clearButtonActive = 'border-slate-900 bg-slate-900 font-semibold text-white shadow-sm dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900';
 const clearButtonIdle = 'border-slate-300 text-slate-400 dark:border-slate-700 dark:text-slate-500';
 
@@ -49,13 +54,17 @@ export function MapToolbar(props: MapToolbarProps) {
           </svg>
           Clear
         </button>
-        <button className={`${toolbarButton} min-w-11 flex-none`} onClick={props.onZoomOut} aria-label="Zoom out" disabled={!props.canZoomOut}>
+        <button className={zoomButton} onClick={props.onZoomOut} aria-label="Zoom out" disabled={!props.canZoomOut}>
           −
         </button>
-        <span className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500 dark:text-slate-300" aria-label={`Map zoom: ${props.zoom}×`}>
-          {props.zoom}×
+        <span
+          ref={props.zoomReadoutRef}
+          className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500 dark:text-slate-300"
+          aria-label={`Map zoom: ${formatMapZoom(props.zoom)}`}
+        >
+          {formatMapZoom(props.zoom)}
         </span>
-        <button className={`${toolbarButton} min-w-11 flex-none`} onClick={props.onZoomIn} aria-label="Zoom in" disabled={!props.canZoomIn}>
+        <button className={zoomButton} onClick={props.onZoomIn} aria-label="Zoom in" disabled={!props.canZoomIn}>
           +
         </button>
         <button

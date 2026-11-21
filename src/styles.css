@@ -113,8 +113,10 @@ button:disabled {
 .tube-map-viewport {
   max-height: min(76vh, 960px);
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y pinch-zoom;
+  /* One-finger panning stays native; pinches are handled in script so they zoom the map rather than the page. */
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+  -webkit-touch-callout: none;
   cursor: grab;
   user-select: none;
 
@@ -309,6 +311,8 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   width: 100%;
   height: auto;
   background: var(--tt-map-background);
+  /* Pinch previews scale the map from its top-left corner (see useMapZoomGestures). */
+  transform-origin: 0 0;
 
   & #bg > .progress > rect:first-of-type {
     transition: fill 150ms ease;
