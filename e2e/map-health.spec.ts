@@ -93,7 +93,7 @@ test('recorded walks are highlighted as walks', async ({ page }) => {
   await openMap(page);
   await page.evaluate(`(async () => {
     const storage = await import('/src/lib/storage.ts');
-    await storage.saveProgress({ travelledSegmentIDs: [], walkedLinkIDs: ['osi_camden_town_camden_road', 'isi_bank_monument'], stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] });
+    await storage.updateProgress(() => ({ travelledSegmentIDs: [], walkedLinkIDs: ['osi_camden_town_camden_road', 'isi_bank_monument'], stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] }));
   })()`);
   await page.reload();
   await openMap(page);

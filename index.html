@@ -16,6 +16,21 @@
     <!-- "default" keeps the home-screen app below an opaque status bar tinted by theme-color, so it stays legible in both themes. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Tube Tracker</title>
+    <script>
+      // Apply the saved theme before anything paints (mirrors useTheme and storage.ts THEME_STORAGE_KEY).
+      (function () {
+        try {
+          var stored = localStorage.getItem('tube-tracker-theme');
+          var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+            meta.setAttribute('content', dark ? '#0c1327' : '#fcfdfe');
+          });
+        } catch (error) {
+          // Storage can be unavailable (e.g. private browsing); the app applies the theme once it loads.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { loadTheme, saveTheme } from '../lib/storage';
+import { loadTheme, readThemeSync, saveTheme } from '../lib/storage';
 import type { ResolvedTheme, Theme } from '../lib/types';
 import { PREFERS_DARK_QUERY, useMediaQuery } from './useMediaQuery';
 
@@ -8,7 +8,8 @@ const THEME_COLORS: Record<ResolvedTheme, string> = { light: '#fcfdfe', dark: '#
 
 /** Follows the system theme until the user picks one; the choice is persisted only when the user makes it. */
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>('system');
+  // Start from the localStorage mirror (the same value index.html applied before the app loaded), so there's no flash.
+  const [theme, setTheme] = useState<Theme>(() => readThemeSync() ?? 'system');
   const userChoseThemeRef = useRef(false);
   const prefersDark = useMediaQuery(PREFERS_DARK_QUERY);
   const resolvedTheme: ResolvedTheme = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;

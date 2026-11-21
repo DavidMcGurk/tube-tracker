@@ -31,9 +31,11 @@
    * Stations only passed through stay unmarked: the travelled line already shows them.
    */
   --tt-station-entered: #16a34a;
-  --tt-station-changed: #d97706;
-  --tt-label-entered: #15803d;
-  --tt-label-changed: #b45309;
+  --tt-station-changed: #7c3aed;
+  --tt-label-entered: #166534;
+  --tt-label-changed: #6d28d9;
+  /* Line colours that need a lighter stand-in on dark backgrounds (also used by the statistics bars). */
+  --tt-line-northern: #000;
   --tt-label-hover: #1d4ed8;
 
   /* Map surfaces. */
@@ -43,17 +45,19 @@
 
 html[data-theme='dark'] {
   color-scheme: dark;
+  background: #020617;
   --tt-travelled: #fbbf24;
   --tt-travelled-opacity: 0.6;
   --tt-preview: #fb923c;
   --tt-preview-opacity: 0.75;
   --tt-highlight-casing: #0f172a;
   --tt-station-entered: #4ade80;
-  --tt-station-changed: #fbbf24;
+  --tt-station-changed: #a78bfa;
+  --tt-line-northern: #e2e8f0;
   --tt-label-default: #fff;
   --tt-label-halo: #0f172a;
   --tt-label-entered: #4ade80;
-  --tt-label-changed: #fbbf24;
+  --tt-label-changed: #c4b5fd;
   --tt-label-hover: #93c5fd;
   --tt-map-background: #0f172a;
 }
@@ -142,7 +146,7 @@ button:disabled {
 }
 
 /* Larger screens: the map tab fills the window and the map viewport takes the remaining height. */
-@media (min-width: 641px) {
+@media (min-width: 641px) and (min-height: 560px) {
   .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
     display: grid;
     width: 100%;
@@ -183,8 +187,8 @@ button:disabled {
   }
 }
 
-/* Phones: the route actions float above the map as a bottom sheet. */
-@media (max-width: 640px) {
+/* Phones (including phones held sideways): the route actions float above the map as a bottom sheet. */
+@media (max-width: 640px), (max-height: 559px) {
   .tube-map-viewport {
     max-height: min(66svh, 720px);
 
@@ -207,7 +211,7 @@ button:disabled {
     background: rgb(255 255 255 / 94%);
     box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
     backdrop-filter: blur(12px);
-    max-height: 55svh;
+    max-height: 45svh;
     overflow-y: auto;
 
     & button {
@@ -232,7 +236,31 @@ button:disabled {
   }
 
   .route-options {
-    max-height: 36svh;
+    max-height: 28svh;
+  }
+
+  /*
+   * Leave room for the floating route bar (its height is measured into --tt-route-bar-height): the page and the map
+   * can scroll far enough to bring everything above it, and station details float just above it.
+   */
+  .app-shell[data-route-bar='true'] {
+    & > main.map-main {
+      padding-bottom: calc(var(--tt-route-bar-height, 0px) + 1.5rem);
+    }
+
+    & .tube-map-viewport {
+      padding-bottom: var(--tt-route-bar-height, 0px);
+    }
+
+    & .map-inspection-panel {
+      position: fixed;
+      z-index: 111;
+      right: calc(0.75rem + env(safe-area-inset-right));
+      bottom: calc(var(--tt-route-bar-height, 0px) + 1.25rem + env(safe-area-inset-bottom));
+      left: calc(0.75rem + env(safe-area-inset-left));
+      margin: 0;
+      box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
+    }
   }
 }
 
@@ -297,6 +325,10 @@ button:disabled {
     width: 100%;
     min-height: 0;
     max-height: none;
+  }
+
+  & .route-options {
+    max-height: min(28vh, 300px);
   }
 }
 
@@ -373,6 +405,19 @@ html[data-theme='dark'] .tube-map__svg {
 
   & .st {
     fill: #e2e8f0;
+  }
+
+  /* The river is drawn near-white; on the dark map it becomes a muted blue with light-blue labels. */
+  & #Thames_stripe path[style*='fill:#e9f7ff'] {
+    fill: #1e3a5f !important;
+  }
+
+  & #Thames_stripe path[style*='stroke:#e9f7ff'] {
+    stroke: #1e3a5f !important;
+  }
+
+  & #Thames_stripe :is(.rn, .rn tspan) {
+    fill: #93c5fd !important;
   }
 }
 
@@ -494,6 +539,6 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .sm
 
 /* Walking interchanges are highlighted as a dashed band so they read as walks, not track. */
 .tube-map__svg .app-walk-link {
-  stroke-dasharray: 2 10;
+  stroke-dasharray: 0 20;
   stroke-width: calc(var(--tt-highlight-width) * 0.75);
 }

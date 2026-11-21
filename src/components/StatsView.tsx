@@ -4,6 +4,8 @@ import { formatKilometres, lineById } from '../lib/route-format';
 import type { Progress } from '../lib/types';
 
 const FALLBACK_LINE_COLOR = '#94a3b8';
+/** Lines whose colour is unreadable on dark backgrounds use a theme-aware stand-in (see styles.css). */
+const THEMED_LINE_COLORS: Record<string, string> = { northern: 'var(--tt-line-northern)' };
 const NETWORK_COLOR = 'var(--tt-travelled)';
 
 function percentOf(part: number, whole: number) {
@@ -31,9 +33,10 @@ export function ProgressBar({ label, detail, percent, color, ariaLabel }: Progre
         aria-label={ariaLabel}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={percent}
+        aria-valuenow={Math.round(percent * 10) / 10}
+        aria-valuetext={detail}
       >
-        <div className="h-full" style={{ width: `${percent}%`, backgroundColor: color }} />
+        <div className="h-full dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.3)]" style={{ width: `${percent}%`, backgroundColor: color }} />
         <div className="h-full flex-1 bg-slate-200 dark:bg-slate-700" />
       </div>
     </div>
@@ -51,7 +54,7 @@ export function StatsView({ progress }: { progress: Progress }) {
     <main className="mx-auto max-w-6xl px-4 pb-10">
       <section className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="network-progress-title">
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h3 id="network-progress-title" className="text-lg font-semibold">Whole network</h3>
+          <h2 id="network-progress-title" className="text-lg font-semibold">Whole network</h2>
           <span className="text-sm text-slate-600 dark:text-slate-300">
             {stats.completedLines} / {stats.lineProgress.length} lines completed
           </span>
@@ -75,10 +78,10 @@ export function StatsView({ progress }: { progress: Progress }) {
       </section>
 
       <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h3 className="mb-4 text-lg font-semibold">Line progress</h3>
+        <h2 className="mb-4 text-lg font-semibold">Line progress</h2>
         <div className="space-y-3">
           {sortedLineProgress.map((line) => {
-            const lineColor = lineById.get(line.id)?.color ?? FALLBACK_LINE_COLOR;
+            const lineColor = THEMED_LINE_COLORS[line.id] ?? lineById.get(line.id)?.color ?? FALLBACK_LINE_COLOR;
             return (
               <div key={line.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
                 <div className="mb-2 flex items-center gap-3">

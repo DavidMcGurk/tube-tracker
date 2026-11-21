@@ -59,3 +59,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+test('a phone held sideways keeps the map usable with a route and its alternatives open', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone-393', 'one phone project, rotated');
+  await page.setViewportSize({ width: 852, height: 393 });
+  await openMap(page);
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+  await page.locator('.route-action-bar').getByRole('button', { name: 'Show alternative routes' }).click();
+  const mapHeight = await page.locator('.tube-map-viewport').evaluate((element) => element.clientHeight);
+  expect(mapHeight).toBeGreaterThan(150);
+  await expectWithinViewport(page, page.locator('.route-action-bar').getByRole('button', { name: 'Hide alternative routes' }), 'hide alternatives button');
+  await page.screenshot({ path: screenshotPath(testInfo, 'landscape-alternatives') });
+});

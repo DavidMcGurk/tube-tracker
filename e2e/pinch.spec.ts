@@ -34,7 +34,7 @@ async function readMap(page: Page, clientPoint: ClientPoint, mapPoint?: ClientPo
     const pointUnder = new DOMPoint(clientPoint.x, clientPoint.y).matrixTransform(matrix.inverse());
     const tracked = mapPoint ? new DOMPoint(mapPoint.x, mapPoint.y).matrixTransform(matrix) : null;
     return {
-      readout: document.querySelector('[aria-label^="Map zoom"]')?.textContent ?? '',
+      readout: document.querySelector('[data-map-zoom-readout]')?.textContent ?? '',
       svgWidth: svg.getBoundingClientRect().width,
       // The map is laid out at zoom × the viewport's content width.
       zoom: svg.getBoundingClientRect().width / viewport.clientWidth,

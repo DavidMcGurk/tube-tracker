@@ -4,6 +4,8 @@ import { IosInstallSteps } from './InstallSteps';
 
 interface InstallPromptProps {
   install: InstallPromptController;
+  /** Whether journeys have been recorded here, which an iOS Home Screen app would not see (it keeps its own data). */
+  hasProgress: boolean;
   /** Set while something else needs the screen, such as the route actions or a confirmation dialog. */
   suppressed: boolean;
 }
@@ -43,7 +45,7 @@ function PromptCard({ children, onClose, arrow }: { children: ReactNode; onClose
         <div className="min-w-0 flex-1">
           <h2 id="install-prompt-title" className="text-base font-semibold leading-snug">Install Tube Tracker</h2>
           <p id="install-prompt-description" className="mt-0.5 text-sm leading-snug text-slate-600 dark:text-slate-300">
-            Opens full screen, works offline and keeps your progress safe.
+            Opens full screen and works offline.
           </p>
         </div>
         <button
@@ -61,7 +63,7 @@ function PromptCard({ children, onClose, arrow }: { children: ReactNode; onClose
 }
 
 /** The "Add to Home Screen" pop-up shown to mobile visitors who are not using the installed app. */
-export function InstallPrompt({ install, suppressed }: InstallPromptProps) {
+export function InstallPrompt({ install, hasProgress, suppressed }: InstallPromptProps) {
   const { promptVariant: variant, platform, dismiss } = install;
   const visible = variant !== null && !suppressed;
 
@@ -91,9 +93,11 @@ export function InstallPrompt({ install, suppressed }: InstallPromptProps) {
     );
   }
 
-  const safariNote = platform === 'ios-other-browser'
-    ? null
-    : <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">In a Safari tab, saved data can be cleared after 7 days without a visit.</p>;
+  // An iOS Home Screen app has its own storage, so journeys already recorded in the browser don't carry over.
+  const storageNote = hasProgress
+    ? 'The Home Screen app keeps its own data, so journeys recorded here won’t appear in it.'
+    : platform === 'ios-other-browser' ? null : 'In a Safari tab, saved data can be cleared after 7 days without a visit.';
+  const safariNote = storageNote && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{storageNote}</p>;
 
   if (variant === 'ipad-share') {
     return (

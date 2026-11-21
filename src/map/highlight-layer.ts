@@ -1,6 +1,7 @@
 import { network } from '../data/network';
 import type { TrackSection } from '../data/track-section';
 import {
+  LINE_SVG_CLASSES,
   closestPointOnComponent,
   joinTouchingComponents,
   polylineLength,
@@ -46,9 +47,69 @@ interface MapGeometry {
 let geometryCache: MapGeometry | null = null;
 const warnedSectionIds = new Set<string>();
 
+/*
+ * Sampling the drawn lines is the slowest part of drawing highlights (getPointAtLength gets slower along long paths),
+ * so the samples are also kept in localStorage, keyed by the map and the sampling settings. Only the first draw after
+ * the map changes pays the cost.
+ */
+const STORED_GEOMETRY_PREFIX = 'tube-tracker-line-geometry:';
+const STORED_GEOMETRY_VERSION = 1;
+let storeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hashText(text: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function storedGeometryKey(documentKey: string) {
+  return `${STORED_GEOMETRY_PREFIX}${hashText(`${STORED_GEOMETRY_VERSION}|${JSON.stringify(LINE_SVG_CLASSES)}|${documentKey}`)}`;
+}
+
+type StoredLines = Record<string, Array<[classRank: number, coordinates: number[]]>>;
+
+function loadStoredLines(documentKey: string): Map<string, RankedComponent[]> {
+  try {
+    const stored = localStorage.getItem(storedGeometryKey(documentKey));
+    if (!stored) return new Map();
+    const lines = JSON.parse(stored) as StoredLines;
+    return new Map(Object.entries(lines).map(([lineId, components]) => [lineId, components.map(([classRank, coordinates]) => ({
+      classRank,
+      points: Array.from({ length: coordinates.length / 2 }, (_, index) => ({ x: coordinates[index * 2]!, y: coordinates[index * 2 + 1]! }))
+    }))]));
+  } catch (error) {
+    console.warn('Ignoring unreadable stored map geometry', error);
+    return new Map();
+  }
+}
+
+function scheduleStoreLines(geometry: MapGeometry) {
+  if (storeTimer) clearTimeout(storeTimer);
+  storeTimer = setTimeout(() => {
+    storeTimer = null;
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const lines: StoredLines = Object.fromEntries([...geometry.lineComponents].map(([lineId, components]) => [
+      lineId,
+      components.map(({ classRank, points }) => [classRank, points.flatMap((point) => [round(point.x), round(point.y)])])
+    ]));
+    try {
+      const key = storedGeometryKey(geometry.documentKey);
+      for (const existing of Object.keys(localStorage)) {
+        if (existing.startsWith(STORED_GEOMETRY_PREFIX) && existing !== key) localStorage.removeItem(existing);
+      }
+      localStorage.setItem(key, JSON.stringify(lines));
+    } catch (error) {
+      console.warn('Unable to store map geometry', error);
+    }
+  }, 1000);
+}
+
 function getGeometry(documentKey: string): MapGeometry {
   if (geometryCache?.documentKey !== documentKey) {
-    geometryCache = { documentKey, stationPositions: null, lineComponents: new Map() };
+    geometryCache = { documentKey, stationPositions: null, lineComponents: loadStoredLines(documentKey) };
   }
   return geometryCache;
 }
@@ -62,7 +123,10 @@ function getLineComponents(svg: SVGSVGElement, geometry: MapGeometry, lineId: st
   const cached = geometry.lineComponents.get(lineId);
   if (cached) return cached;
   const components = sampleLineComponents(svg, lineId);
-  if (components) geometry.lineComponents.set(lineId, components);
+  if (components) {
+    geometry.lineComponents.set(lineId, components);
+    scheduleStoreLines(geometry);
+  }
   return components ?? [];
 }
 

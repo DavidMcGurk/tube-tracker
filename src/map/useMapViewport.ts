@@ -67,15 +67,54 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
   const viewRef = useRef<MapViewState>(initialView ?? { zoom, scrollLeft: 0, scrollTop: 0 });
   const laidOutViewportRef = useRef<HTMLDivElement | null>(null);
   const hasInitialViewRef = useRef(initialView !== null);
+  /** The map point at the centre of the viewport, as fractions of the map, kept so resizes can preserve it. */
+  const centreRef = useRef<{ x: number; y: number } | null>(null);
+
+  const recordCentre = useCallback((viewport: HTMLElement) => {
+    if (viewport.scrollWidth === 0 || viewport.scrollHeight === 0) return;
+    centreRef.current = {
+      x: (viewport.scrollLeft + viewport.clientWidth / 2) / viewport.scrollWidth,
+      y: (viewport.scrollTop + viewport.clientHeight / 2) / viewport.scrollHeight
+    };
+  }, []);
 
   useEffect(() => {
     const saveView = () => storeMapView(viewRef.current);
+    // iOS may discard a backgrounded page without firing pagehide, so also save when the page is hidden.
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') saveView();
+    };
     window.addEventListener('pagehide', saveView);
+    document.addEventListener('visibilitychange', saveWhenHidden);
     return () => {
       window.removeEventListener('pagehide', saveView);
+      document.removeEventListener('visibilitychange', saveWhenHidden);
       lastMapView = viewRef.current;
+      // Also persist on unmount, so reloading from another tab keeps the view.
+      saveView();
     };
   }, []);
+
+  // When the viewport's width changes (full screen, rotation, window resize) the map rescales with it, so keep the
+  // same point in the centre instead of letting the scroll offset drift. Height-only changes (a panel opening) don't
+  // rescale the map, so the map stays put rather than shifting under the pointer.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !svgMarkup) return;
+    let lastWidth = viewport.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (viewport.clientWidth === lastWidth) return;
+      lastWidth = viewport.clientWidth;
+      const centre = centreRef.current;
+      if (!centre) return;
+      viewport.scrollLeft = centre.x * viewport.scrollWidth - viewport.clientWidth / 2;
+      viewport.scrollTop = centre.y * viewport.scrollHeight - viewport.clientHeight / 2;
+      viewRef.current = { zoom: viewRef.current.zoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    });
+    // The border box ignores padding changes (e.g. room left for the phone route bar).
+    observer.observe(viewport, { box: 'border-box' });
+    return () => observer.disconnect();
+  }, [viewportRef, svgMarkup]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -122,15 +161,17 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
     }
 
     viewRef.current = { zoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    recordCentre(viewport);
     if (shouldCentreDesktopMap) {
       // The desktop layout settles after the first frame, so centre again once it has.
       window.requestAnimationFrame(() => {
         if (viewportRef.current !== viewport || viewRef.current.zoom !== zoom) return;
         centreScroll(viewport);
         viewRef.current = { zoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+        recordCentre(viewport);
       });
     }
-  }, [viewportRef, fullscreen, zoom, svgMarkup, isMobileViewport]);
+  }, [viewportRef, fullscreen, zoom, svgMarkup, isMobileViewport, recordCentre]);
 
   /**
    * Applies a zoom chosen by a gesture, with the scroll offset that keeps its anchor in place. The view is recorded
@@ -144,8 +185,9 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
     viewport.scrollLeft = scrollLeft;
     viewport.scrollTop = scrollTop;
     viewRef.current = { zoom: nextZoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    recordCentre(viewport);
     setZoom(nextZoom);
-  }, [viewportRef]);
+  }, [viewportRef, recordCentre]);
 
   const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     viewRef.current = {
@@ -153,7 +195,8 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
       scrollLeft: event.currentTarget.scrollLeft,
       scrollTop: event.currentTarget.scrollTop
     };
-  }, []);
+    recordCentre(event.currentTarget);
+  }, [recordCentre]);
 
   return {
     zoom,

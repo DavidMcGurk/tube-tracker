@@ -9,7 +9,7 @@ import {
   type InstallPromptState
 } from '../lib/install-prompt';
 import { observeInstallPromptState, updateInstallPromptState } from '../lib/storage';
-import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from './useMediaQuery';
+import { useMediaQuery } from './useMediaQuery';
 
 /** The pop-up waits a moment after load so it never competes with the first look at the map. */
 export const INSTALL_PROMPT_DELAY_MS = 2000;
@@ -25,7 +25,6 @@ function saveInstallPromptState(changes: InstallPromptState) {
 export function useInstallPrompt() {
   const capture = useSyncExternalStore(subscribeInstallCapture, getInstallCaptureSnapshot, getInstallCaptureSnapshot);
   const coarsePointer = useMediaQuery('(pointer: coarse)');
-  const narrowViewport = useMediaQuery(MOBILE_VIEWPORT_QUERY);
   const displayModeStandalone = useMediaQuery('(display-mode: standalone)');
   const displayModeFullscreen = useMediaQuery('(display-mode: fullscreen)');
   const standalone = isStandalone({
@@ -67,7 +66,8 @@ export function useInstallPrompt() {
   const variant = stored === null || dismissedThisSession ? null : getInstallPromptVariant({
     platform,
     hasDeferredPrompt: capture.deferredPrompt !== null,
-    isMobile: coarsePointer || narrowViewport,
+    // A phone or tablet: judged by the device, not the window, so a narrow desktop window never gets the pop-up.
+    isMobile: coarsePointer || platform !== 'other',
     standalone,
     dismissedAt: stored.dismissedAt,
     installed,

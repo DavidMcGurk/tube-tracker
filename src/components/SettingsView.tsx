@@ -8,23 +8,24 @@ function ExternalLink({ href, children }: { href: string; children: string }) {
 interface SettingsViewProps {
   onResetRequest: () => void;
   install: InstallPromptController;
+  hasProgress: boolean;
 }
 
-export function SettingsView({ onResetRequest, install }: SettingsViewProps) {
+export function SettingsView({ onResetRequest, install, hasProgress }: SettingsViewProps) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-10">
       <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <div>
-          <h3 className="text-lg font-semibold">Progress</h3>
+          <h2 className="text-lg font-semibold">Progress</h2>
           <div className="mt-3 flex flex-wrap gap-3">
-            <button onClick={onResetRequest} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
+            <button onClick={onResetRequest} className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
           </div>
         </div>
 
-        <InstallAppSection install={install} />
+        <InstallAppSection install={install} hasProgress={hasProgress} />
 
         <div>
-          <h3 className="text-lg font-semibold">About</h3>
+          <h2 className="text-lg font-semibold">About</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
             Tube Tracker uses a local graph model of London transport stations and sections. Your progress is stored only on
             this device (in IndexedDB), and the app keeps working offline after its first successful load.
@@ -32,7 +33,7 @@ export function SettingsView({ onResetRequest, install }: SettingsViewProps) {
         </div>
 
         <div>
-          <h3 className="text-lg font-semibold">Data sources</h3>
+          <h2 className="text-lg font-semibold">Data sources</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
             <li>
               Map SVG based on work by <ExternalLink href="https://commons.wikimedia.org/wiki/User:Sameboat">Sameboat</ExternalLink>,

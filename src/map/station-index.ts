@@ -58,15 +58,24 @@ function addHitAreas(svg: SVGSVGElement) {
 
 function buildStationIndex(svg: SVGSVGElement): StationIndex {
   const elementsByStation = new Map<string, SVGElement[]>();
-  const bind = (element: SVGElement, stationId: string) => {
+  /**
+   * Markers are decorative and clickable; each station's name label is its single focusable control (one tab stop
+   * per station, with its selection exposed through aria-pressed).
+   */
+  const bind = (element: SVGElement, stationId: string, kind: 'marker' | 'label') => {
     const station = getStationById(stationId);
     if (!station) return;
     element.setAttribute('data-app-station-id', stationId);
-    element.setAttribute('role', 'button');
-    element.setAttribute('tabindex', '0');
-    element.setAttribute('aria-label', `Select station ${station.name}`);
     element.setAttribute('data-app-selected', 'false');
     element.setAttribute('data-app-hovered', 'false');
+    if (kind === 'label') {
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.setAttribute('aria-label', `Select station ${station.name}`);
+      element.setAttribute('aria-pressed', 'false');
+    } else {
+      element.setAttribute('aria-hidden', 'true');
+    }
     const elements = elementsByStation.get(stationId) ?? [];
     elements.push(element);
     elementsByStation.set(stationId, elements);
@@ -76,18 +85,25 @@ function buildStationIndex(svg: SVGSVGElement): StationIndex {
   addHitAreas(svg);
   for (const marker of markers) {
     const station = getMarkerStation(marker);
-    if (station) bind(marker, station.id);
+    if (station) bind(marker, station.id, 'marker');
   }
   for (const group of svg.querySelectorAll<SVGElement>('#station_nodes g[id]')) {
     const station = getMarkerStation(group);
-    if (station) bind(group, station.id);
+    if (station) bind(group, station.id, 'marker');
+  }
+  // Bank and Monument share one hub drawing: the capsule outline is Bank, the circle outline is Monument.
+  const hub = svg.querySelector('#Bank_Monument_hub');
+  for (const [label, selector] of [['bank', 'rect[style*="stroke:#000"]'], ['monument', 'circle[style*="stroke:#000"]']] as const) {
+    const station = stationsByMapLabel.get(label)?.[0];
+    const outline = hub?.querySelector<SVGElement>(selector);
+    if (station && outline) bind(outline, station.id, 'marker');
   }
   // Labels are matched by text; ambiguous names (e.g. two "Edgware Road" stations) go to the nearest bound marker.
   for (const label of svg.querySelectorAll<SVGTextElement>('#text text')) {
     const candidates = stationsByMapLabel.get(normalizeStationLabel(label.textContent ?? ''));
     if (!candidates?.length) continue;
     const stationId = getClosestStationId(label, candidates, markers);
-    if (stationId) bind(label, stationId);
+    if (stationId) bind(label, stationId, 'label');
   }
 
   return { elementsByStation };
@@ -113,5 +129,8 @@ export function applyStationStates(index: StationIndex, progress: Progress) {
 }
 
 export function setStationFlag(index: StationIndex, stationId: string, flag: StationFlag, value: boolean) {
-  for (const element of index.elementsByStation.get(stationId) ?? []) element.setAttribute(flag, String(value));
+  for (const element of index.elementsByStation.get(stationId) ?? []) {
+    element.setAttribute(flag, String(value));
+    if (flag === 'data-app-selected' && element.hasAttribute('aria-pressed')) element.setAttribute('aria-pressed', String(value));
+  }
 }

@@ -1,68 +1,97 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addRouteToProgress, EMPTY_PROGRESS } from '../lib/progress';
-import { loadProgress, saveProgress } from '../lib/storage';
+import { observeProgress, updateProgress } from '../lib/storage';
 import type { Progress, RouteResult } from '../lib/types';
 
 export type RecordOutcome = 'recorded' | 'unchanged' | 'failed';
+export type ProgressErrorKind = 'load' | 'save';
 
-const LOAD_FAILED_MESSAGE = 'Your saved progress could not be loaded, so changes will not be saved. Try reloading the app.';
-const SAVE_FAILED_MESSAGE = 'That change could not be saved on this device. Please try again.';
+const ERROR_MESSAGES: Record<ProgressErrorKind, string> = {
+  load: 'Your saved progress could not be loaded, so new journeys will not be saved.',
+  save: 'That change could not be saved on this device. Please try again.'
+};
+
+function sameProgress(a: Progress, b: Progress) {
+  return (Object.keys(a) as Array<keyof Progress>).every((field) =>
+    a[field].length === b[field].length && a[field].every((id, index) => id === b[field][index]));
+}
 
 /**
- * Loads progress from IndexedDB and persists every change. Saving is blocked until loading succeeds, so a failed
- * load can never overwrite the stored record; a failed save rolls the change back and reports an error.
+ * Keeps progress in sync with IndexedDB. The stored record is observed, so every open copy of the app shows the
+ * same progress, and each change is applied to the stored record in a transaction, so copies never overwrite each
+ * other. Changes wait for the first load, can never replace a record that failed to load, and roll back (with an
+ * error) if they can't be saved.
  */
 export function useProgress() {
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
-  const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<ProgressErrorKind | null>(null);
   const progressRef = useRef(progress);
-  const loadedRef = useRef(false);
+  const loadRef = useRef<{ promise: Promise<boolean>; resolve: (loaded: boolean) => void } | null>(null);
+  if (!loadRef.current) {
+    let resolve: (loaded: boolean) => void = () => undefined;
+    const promise = new Promise<boolean>((done) => { resolve = done; });
+    loadRef.current = { promise, resolve };
+  }
 
   useEffect(() => {
-    let cancelled = false;
-    loadProgress()
-      .then((stored) => {
-        if (cancelled) return;
+    const load = loadRef.current!;
+    return observeProgress(
+      (stored) => {
+        load.resolve(true);
+        setErrorKind((current) => (current === 'load' ? null : current));
+        if (sameProgress(stored, progressRef.current)) return;
         progressRef.current = stored;
-        loadedRef.current = true;
         setProgress(stored);
-      })
-      .catch((loadError: unknown) => {
-        if (cancelled) return;
+      },
+      (loadError: unknown) => {
         console.error('Unable to load saved progress', loadError);
-        setError(LOAD_FAILED_MESSAGE);
-      });
-    return () => { cancelled = true; };
+        load.resolve(false);
+        setErrorKind('load');
+      }
+    );
   }, []);
 
-  const commit = useCallback(async (next: Progress) => {
-    if (!loadedRef.current) {
-      setError(LOAD_FAILED_MESSAGE);
+  const apply = useCallback(async (change: (current: Progress) => Progress) => {
+    if (!(await loadRef.current!.promise)) {
+      setErrorKind('load');
       return false;
     }
     const previous = progressRef.current;
-    progressRef.current = next;
-    setProgress(next);
+    const optimistic = change(previous);
+    progressRef.current = optimistic;
+    setProgress(optimistic);
     try {
-      await saveProgress(next);
+      const stored = await updateProgress(change);
+      setErrorKind((current) => (current === 'save' ? null : current));
+      if (!sameProgress(stored, progressRef.current)) {
+        progressRef.current = stored;
+        setProgress(stored);
+      }
       return true;
     } catch (saveError) {
       console.error('Unable to save progress', saveError);
       progressRef.current = previous;
       setProgress(previous);
-      setError(SAVE_FAILED_MESSAGE);
+      setErrorKind('save');
       return false;
     }
   }, []);
 
   const recordRoute = useCallback(async (route: RouteResult): Promise<RecordOutcome> => {
-    const next = addRouteToProgress(progressRef.current, route);
-    if (next === progressRef.current) return 'unchanged';
-    return (await commit(next)) ? 'recorded' : 'failed';
-  }, [commit]);
+    await loadRef.current!.promise;
+    if (addRouteToProgress(progressRef.current, route) === progressRef.current) return 'unchanged';
+    return (await apply((current) => addRouteToProgress(current, route))) ? 'recorded' : 'failed';
+  }, [apply]);
 
-  const resetProgress = useCallback(() => commit(EMPTY_PROGRESS), [commit]);
-  const dismissError = useCallback(() => setError(null), []);
+  const resetProgress = useCallback(() => apply(() => EMPTY_PROGRESS), [apply]);
+  const dismissError = useCallback(() => setErrorKind(null), []);
 
-  return { progress, error, dismissError, recordRoute, resetProgress };
+  return {
+    progress,
+    error: errorKind ? ERROR_MESSAGES[errorKind] : null,
+    errorKind,
+    dismissError,
+    recordRoute,
+    resetProgress
+  };
 }

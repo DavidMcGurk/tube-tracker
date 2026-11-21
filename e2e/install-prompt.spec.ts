@@ -156,6 +156,18 @@ test.describe('iPhone Safari', () => {
     expect(errors).toEqual([]);
   });
 
+  test('explains that journeys recorded in Safari stay in Safari', async ({ page }) => {
+    await openMap(page, { installPrompt: 'default' });
+    await page.evaluate(`(async () => {
+      const storage = await import('/src/lib/storage.ts');
+      await storage.updateProgress(() => ({ travelledSegmentIDs: [], walkedLinkIDs: [], stationsEnteredOrExitedIDs: ['bank'], stationsChangedAtIDs: [] }));
+    })()`);
+    const prompt = installPrompt(page);
+    await expect(prompt).toBeVisible();
+    await expect(prompt).toContainText('keeps its own data');
+    await expect(prompt).not.toContainText('keeps your progress safe');
+  });
+
   test('Escape dismisses it', async ({ page }) => {
     await openMap(page, { installPrompt: 'default' });
     await expect(installPrompt(page)).toBeVisible();
@@ -273,6 +285,14 @@ test.describe('desktop', () => {
     await page.getByRole('main').getByRole('button', { name: 'Install app' }).click();
     expect(await installPromptCalls(page)).toBe(1);
     expect(errors).toEqual([]);
+  });
+
+  test('a narrow desktop window still gets no pop-up', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 800 });
+    await openMap(page, { installPrompt: 'default' });
+    await dispatchInstallEvent(page, 'accepted');
+    await waitPastPromptDelay(page);
+    await expect(anyInstallPrompt(page)).toHaveCount(0);
   });
 
   test('the browser toolbar colour follows the app theme, not just the system one', async ({ page }) => {

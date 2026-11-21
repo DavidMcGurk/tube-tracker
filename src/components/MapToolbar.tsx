@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { formatMapZoom } from '../lib/map-zoom';
 import type { ResolvedTheme } from '../lib/types';
+import { HighlightSwatch } from './HighlightSwatch';
 import { EnterFullscreenIcon, ExitFullscreenIcon } from './icons';
 import { ThemeToggleButton } from './ThemeToggleButton';
 
@@ -19,24 +20,12 @@ interface MapToolbarProps {
   onToggleFullscreen: () => void;
   resolvedTheme: ResolvedTheme;
   onToggleTheme: () => void;
-  showNewRouteLegend: boolean;
 }
 
 const toolbarButton = 'min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700';
 const zoomButton = `${toolbarButton} min-w-11 flex-none disabled:opacity-40`;
 const clearButtonActive = 'border-slate-900 bg-slate-900 font-semibold text-white shadow-sm dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900';
 const clearButtonIdle = 'border-slate-300 text-slate-400 dark:border-slate-700 dark:text-slate-500';
-
-/** A small picture of a highlighted line: the band, its casing strip, and the line itself. */
-function HighlightSwatch({ band, opacity }: { band: string; opacity: string }) {
-  return (
-    <span className="relative inline-flex h-3 w-7 items-center" aria-hidden="true">
-      <span className={`absolute inset-0 rounded-full ${band} ${opacity}`} />
-      <span className="absolute inset-x-0.5 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-(--tt-highlight-casing)" />
-      <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-slate-700 dark:bg-slate-200" />
-    </span>
-  );
-}
 
 export function MapToolbar(props: MapToolbarProps) {
   const { fullscreen } = props;
@@ -57,12 +46,10 @@ export function MapToolbar(props: MapToolbarProps) {
         <button className={zoomButton} onClick={props.onZoomOut} aria-label="Zoom out" disabled={!props.canZoomOut}>
           −
         </button>
-        <span
-          ref={props.zoomReadoutRef}
-          className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500 dark:text-slate-300"
-          aria-label={`Map zoom: ${formatMapZoom(props.zoom)}`}
-        >
-          {formatMapZoom(props.zoom)}
+        <span className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500 dark:text-slate-300">
+          <span className="sr-only">Map zoom </span>
+          {/* Pinch gestures write this span's text directly, so it must stay a single text node. */}
+          <span ref={props.zoomReadoutRef} data-map-zoom-readout>{formatMapZoom(props.zoom)}</span>
         </span>
         <button className={zoomButton} onClick={props.onZoomIn} aria-label="Zoom in" disabled={!props.canZoomIn}>
           +
@@ -77,24 +64,19 @@ export function MapToolbar(props: MapToolbarProps) {
           {fullscreen ? <ExitFullscreenIcon /> : <EnterFullscreenIcon />}
         </button>
         <ThemeToggleButton className="fullscreen-theme-control" resolvedTheme={props.resolvedTheme} onToggle={props.onToggleTheme} />
+        {/* The legend never changes size, so the map doesn't move when a journey is selected. */}
         <div className="map-legend flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-600 dark:text-slate-300">
-          <span className="inline-flex items-center gap-2" aria-label="Yellow highlights show travelled track">
+          <span className="inline-flex items-center gap-2">
             <HighlightSwatch band="bg-(--tt-travelled)" opacity="opacity-(--tt-travelled-opacity)" />
-            Travelled
+            Travelled<span className="sr-only"> track is highlighted in yellow</span>
           </span>
-          {props.showNewRouteLegend && (
-            <span className="inline-flex items-center gap-2" aria-label="Orange highlights show new track in the selected route">
-              <HighlightSwatch band="bg-(--tt-preview)" opacity="opacity-(--tt-preview-opacity)" />
-              New route
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1.5" aria-label="Green stations are ones you have entered or exited">
+          <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-entered)" aria-hidden="true" />
-            Visited
+            Visited<span className="sr-only">: stations you entered or exited are green</span>
           </span>
-          <span className="inline-flex items-center gap-1.5" aria-label="Amber stations are ones where you changed lines">
+          <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-changed)" aria-hidden="true" />
-            Changed
+            Changed<span className="sr-only">: stations where you changed lines are purple</span>
           </span>
         </div>
       </div>

@@ -1,9 +1,16 @@
+import { useEffect, useRef } from 'react';
 import { formatRouteEndpoints, getRouteKey } from '../lib/map-interactions';
 import { routeIsAlreadyComplete } from '../lib/progress';
 import { describeRouteChanges, describeRouteDistance, describeRouteTitle, getStationName } from '../lib/route-format';
 import type { Progress, RouteResult } from '../lib/types';
+import { HighlightSwatch } from './HighlightSwatch';
+
+/** On phones the bar floats over the map; its height lets the map and page leave room for it (see styles.css). */
+const ROUTE_BAR_HEIGHT_PROPERTY = '--tt-route-bar-height';
 
 interface RouteActionBarProps {
+  /** Whether the selected route includes track (or walks) not yet recorded, shown in the preview colour. */
+  hasNewTrack: boolean;
   selectedStationIds: readonly string[];
   routeOptions: readonly RouteResult[];
   activeRoute: RouteResult;
@@ -21,13 +28,38 @@ export function RouteActionBar(props: RouteActionBarProps) {
   const [startId, endId] = props.selectedStationIds;
   const endpoints = formatRouteEndpoints(startId && getStationName(startId), endId && getStationName(endId));
   const activeKey = getRouteKey(activeRoute);
+  const barRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    let frame = 0;
+    // Applied on the next frame: the property changes other elements' layout, which must not re-enter this observer.
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => root.style.setProperty(ROUTE_BAR_HEIGHT_PROPERTY, `${bar.offsetHeight}px`));
+    });
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      root.style.removeProperty(ROUTE_BAR_HEIGHT_PROPERTY);
+    };
+  }, []);
   // A walk-only journey's single change just repeats the endpoints, so it is not repeated.
   const changesText = activeRoute.legs.length > 1 ? describeRouteChanges(activeRoute) : '';
 
   return (
-    <div className={`route-action-bar mt-3 flex justify-end${chooserOpen ? ' has-options' : ''}`}>
+    <div ref={barRef} className={`route-action-bar mt-3 flex justify-end${chooserOpen ? ' has-options' : ''}`}>
       <div className="route-primary-action flex w-full flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1 text-sm font-medium">
+          {props.hasNewTrack && (
+            <span className="mr-1.5 inline-flex align-[-0.1em]">
+              <HighlightSwatch band="bg-(--tt-preview)" opacity="opacity-(--tt-preview-opacity)" />
+              <span className="sr-only">New track is highlighted in orange. </span>
+            </span>
+          )}
           Route {props.activeRouteIndex + 1}: {describeRouteTitle(activeRoute)}
           {endpoints && <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{endpoints}</span>}
           {changesText && <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{changesText}</span>}
@@ -51,11 +83,10 @@ export function RouteActionBar(props: RouteActionBarProps) {
               <button
                 key={key}
                 aria-pressed={isActive}
-                className={`min-h-14 w-full rounded-xl border px-3 py-2 text-left text-sm dark:border-slate-600 ${isActive ? 'border-blue-600 bg-blue-50 dark:bg-blue-950' : 'border-slate-300'}`}
+                className={`min-h-11 w-full rounded-xl border px-3 py-2 text-left text-sm ${isActive ? 'border-blue-600 bg-blue-50 dark:border-blue-400 dark:bg-blue-950' : 'border-slate-300 dark:border-slate-600'}`}
                 onClick={() => props.onChooseRoute(route)}
               >
                 <span className="block font-medium">Route {index + 1}: {describeRouteTitle(route)}</span>
-                <span className="block text-xs font-normal opacity-75">{endpoints}</span>
                 <span className="block text-xs opacity-75">
                   {describeRouteDistance(route)}
                   {optionChanges ? ` · ${optionChanges}` : ' · no changes'}

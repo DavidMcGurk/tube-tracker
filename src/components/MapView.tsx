@@ -29,6 +29,8 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
   const viewport = useMapViewport({ viewportRef, svgMarkup: markup, fullscreen });
   const [inspectedStationId, setInspectedStationId] = useState<string | null>(null);
   const { activeRoute, selectedStationIds } = selection;
+  /** The selection before each of the last two station clicks, so a double click can leave it unchanged. */
+  const recentActivationsRef = useRef<Array<{ stationId: string; selectionBefore: readonly string[] }>>([]);
 
   const newRouteLinkIds = useMemo(() => {
     const recorded = new Set([...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
@@ -45,12 +47,17 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
 
   const { cancelInteractions, ...gestureHandlers } = useMapGestures({
     onStationActivate: (stationId) => {
+      recentActivationsRef.current = [...recentActivationsRef.current, { stationId, selectionBefore: selectedStationIds }].slice(-2);
       setInspectedStationId(null);
       selection.toggleStation(stationId);
     },
     onStationInspect: setInspectedStationId,
-    // The two clicks of a double click already toggled the station on and off, so the selection is unchanged.
-    onStationDoubleClick: setInspectedStationId,
+    onStationDoubleClick: (stationId) => {
+      // Undo the two clicks that make up the double click, then show the station's details.
+      const [first] = recentActivationsRef.current;
+      if (first?.stationId === stationId) selection.restoreSelection(first.selectionBefore);
+      setInspectedStationId(stationId);
+    },
     onStationDragSelect: (fromStationId, toStationId) => {
       setInspectedStationId(null);
       selection.selectPair(fromStationId, toStationId);
@@ -94,7 +101,6 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           onToggleFullscreen={onToggleFullscreen}
           resolvedTheme={resolvedTheme}
           onToggleTheme={onToggleTheme}
-          showNewRouteLegend={newRouteLinkIds.length > 0}
         />
 
         <div
@@ -102,7 +108,8 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           className="tube-map-viewport overflow-auto rounded-2xl border border-slate-200 bg-(--tt-map-background) dark:border-slate-700"
           {...gestureHandlers}
           onScroll={viewport.handleScroll}
-          aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan."
+          role="region"
+          aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan; pinch to zoom."
           dangerouslySetInnerHTML={{ __html: markup }}
         />
         {inspectedStation && (
@@ -127,6 +134,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
 
         {activeRoute && (
           <RouteActionBar
+            hasNewTrack={newRouteLinkIds.length > 0}
             selectedStationIds={selectedStationIds}
             routeOptions={selection.routeOptions}
             activeRoute={activeRoute}

@@ -2,7 +2,7 @@ import type { InstallPromptController } from '../hooks/useInstallPrompt';
 import { IosInstallSteps, isIosPlatform } from './InstallSteps';
 
 /** Settings fallback for installing the app, available even after the pop-up was dismissed. */
-export function InstallAppSection({ install }: { install: InstallPromptController }) {
+export function InstallAppSection({ install, hasProgress }: { install: InstallPromptController; hasProgress: boolean }) {
   if (install.standalone) return null;
   const ios = isIosPlatform(install.platform);
 
@@ -30,10 +30,12 @@ export function InstallAppSection({ install }: { install: InstallPromptControlle
 
   return (
     <div>
-      <h3 className="text-lg font-semibold">Install app</h3>
+      <h2 className="text-lg font-semibold">Install app</h2>
       <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
         Add Tube Tracker to your home screen to open it full screen and use it offline.
-        {ios && ' It also keeps your progress safe: Safari can clear a website’s saved data after 7 days without a visit.'}
+        {ios && (hasProgress
+          ? ' On iPhone and iPad the Home Screen app keeps its own data, so journeys recorded in Safari won’t appear in it.'
+          : ' It also protects your progress: Safari can clear a website’s saved data after 7 days without a visit.')}
       </p>
       <div className="mt-3">{body}</div>
     </div>

@@ -99,8 +99,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await recordJourney(page, testInfo, 'paddington', 'london_bridge');
 
     const expected = colorScheme === 'light'
-      ? { entered: 'rgb(21, 128, 61)', changed: 'rgb(180, 83, 9)' }
-      : { entered: 'rgb(74, 222, 128)', changed: 'rgb(251, 191, 36)' };
+      ? { entered: 'rgb(22, 101, 52)', changed: 'rgb(109, 40, 217)' }
+      : { entered: 'rgb(74, 222, 128)', changed: 'rgb(196, 181, 253)' };
     const readFills = () => page.evaluate(() => {
       const fillOf = (element: Element | null) => (element ? getComputedStyle(element).fill : null);
       const label = (stationId: string) => document.querySelector(`#text text[data-app-station-id="${stationId}"]`);
@@ -161,4 +161,78 @@ test('the Clear button stands out only when there is something to clear', async 
   await clear.click();
   await expect(clear).toBeDisabled();
   await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'false');
+});
+
+test('double-clicking an already selected station keeps the journey as it was', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'laptop-1280', 'mouse double click');
+  await openMap(page);
+  await stationLabel(page, 'oxford_circus').click();
+  await stationLabel(page, 'holborn').click();
+  await expect(page.locator('.route-action-bar')).toContainText('Oxford Circus → Holborn');
+  await stationLabel(page, 'oxford_circus').dblclick();
+  await expect(page.locator('.map-inspection-panel')).toContainText('Oxford Circus');
+  await expect(page.locator('.route-action-bar')).toContainText('Oxford Circus → Holborn');
+});
+
+test('station details stay visible above the route bar on phones', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone-393', 'phone layout');
+  await openMap(page);
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+  // Long-press Oxford Circus.
+  const label = stationLabel(page, 'oxford_circus');
+  await label.scrollIntoViewIfNeeded();
+  const { x, y } = await centreOf(label);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  const panel = page.locator('.map-inspection-panel');
+  await expect(panel).toContainText('Oxford Circus');
+  const [panelBox, barBox] = await Promise.all([panel.boundingBox(), page.locator('.route-action-bar').boundingBox()]);
+  expect(panelBox && barBox && panelBox.y + panelBox.height <= barBox.y + 1).toBe(true);
+  await expect(panel.getByRole('button', { name: 'Close map details' })).toBeVisible();
+});
+
+test('the map view is kept when reloading from another tab', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'laptop-1280', 'one project');
+  await openMap(page);
+  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await page.getByRole('button', { name: 'Zoom in' }).click();
+  const viewport = page.locator('.tube-map-viewport');
+  await viewport.evaluate((element) => { element.scrollLeft = 900; element.scrollTop = 500; });
+  await page.waitForTimeout(100);
+  await page.getByRole('button', { name: 'Statistics' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(page.locator('.tube-map-viewport svg')).toBeVisible();
+  await expect(page.locator('.map-toolbar')).toContainText('2.5×');
+  expect(await viewport.evaluate((element) => [element.scrollLeft, element.scrollTop])).toEqual([900, 500]);
+});
+
+test('two open copies of the app never overwrite each other’s journeys', async ({ page, context }, testInfo) => {
+  test.skip(testInfo.project.name !== 'laptop-1280', 'one project');
+  const other = await context.newPage();
+  await openMap(page);
+  await openMap(other);
+  await recordJourney(page, testInfo, 'paddington', 'waterloo');
+  await recordJourney(other, testInfo, 'brixton', 'stockwell');
+  for (const copy of [page, other]) {
+    await expect(stationLabel(copy, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+    await expect(stationLabel(copy, 'brixton')).toHaveAttribute('data-app-state', 'entered');
+  }
+  await page.reload();
+  await openMap(page);
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+  await expect(stationLabel(page, 'brixton')).toHaveAttribute('data-app-state', 'entered');
+});
+
+test('the saved theme is applied before the app has loaded', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'laptop-1280', 'one project');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.addInitScript(() => localStorage.setItem('tube-tracker-theme', 'dark'));
+  // Block the app's script: only index.html's own bootstrap can set the theme.
+  await page.route('**/src/main.tsx', (route) => route.abort());
+  await page.goto('./');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

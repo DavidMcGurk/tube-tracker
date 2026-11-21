@@ -36,13 +36,42 @@ class TubeTrackerDB extends Dexie {
 
 const db = new TubeTrackerDB();
 
-export async function loadProgress(): Promise<Progress> {
+async function readProgress(): Promise<Progress> {
   const record = await db.progress.get('current');
   return sanitizeProgress(record?.value);
 }
 
-export async function saveProgress(progress: Progress) {
-  await db.progress.put({ id: 'current', value: progress });
+/**
+ * Reports the stored progress now and after every change, including changes made by another open copy of the app
+ * (another tab, or the installed app alongside a browser tab).
+ */
+export function observeProgress(onChange: (progress: Progress) => void, onError: (error: unknown) => void) {
+  const subscription = liveQuery(readProgress).subscribe({ next: onChange, error: onError });
+  return () => subscription.unsubscribe();
+}
+
+/** Applies a change to the stored progress in one transaction, so concurrent copies of the app never overwrite each other. */
+export async function updateProgress(change: (current: Progress) => Progress): Promise<Progress> {
+  return db.transaction('rw', db.progress, async () => {
+    const next = change(await readProgress());
+    await db.progress.put({ id: 'current', value: next });
+    return next;
+  });
+}
+
+/*
+ * The theme is also mirrored in localStorage so index.html can apply it before the app loads (no flash of the
+ * wrong theme); IndexedDB stays the source of truth.
+ */
+export const THEME_STORAGE_KEY = 'tube-tracker-theme';
+
+export function readThemeSync(): Theme | null {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function loadTheme(): Promise<Theme> {
@@ -51,6 +80,11 @@ export async function loadTheme(): Promise<Theme> {
 }
 
 export async function saveTheme(theme: Theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Private browsing can block localStorage; IndexedDB below still records the choice.
+  }
   await db.settings.put({ id: 'theme', value: theme });
 }
 

@@ -44,6 +44,12 @@ export function useRouteSelection() {
     setSelectedStationIds([]);
   }, [resetRouteChoice]);
 
+  /** Puts back an earlier selection, e.g. undoing the two clicks of a double click. */
+  const restoreSelection = useCallback((stationIds: readonly string[]) => {
+    resetRouteChoice();
+    setSelectedStationIds([...stationIds]);
+  }, [resetRouteChoice]);
+
   const chooseRoute = useCallback((route: RouteResult) => setSelectedRouteKey(getRouteKey(route)), []);
 
   const toggleChooser = useCallback(() => {
@@ -62,6 +68,7 @@ export function useRouteSelection() {
     toggleStation,
     selectPair,
     clearSelection,
+    restoreSelection,
     chooseRoute,
     toggleChooser,
     closeChooser
