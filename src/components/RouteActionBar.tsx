@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { formatRouteEndpoints, getRouteKey } from '../lib/map-interactions';
-import { routeIsAlreadyComplete } from '../lib/progress';
+import { isStreetWalkOnly, routeIsAlreadyComplete } from '../lib/progress';
 import { describeRouteChanges, describeRouteDistance, describeRouteTitle, getStationName } from '../lib/route-format';
 import type { Progress, RouteResult } from '../lib/types';
 import { PreviewSwatch } from './HighlightSwatches';
@@ -65,9 +65,16 @@ export function RouteActionBar(props: RouteActionBarProps) {
           <button onClick={props.onClear} className="min-h-11 rounded-full border border-slate-300 px-4 py-2 text-sm dark:border-slate-600">
             Clear selection
           </button>
-          <button onClick={props.onRecord} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
-            {routeIsAlreadyComplete(progress, activeRoute) ? 'Already explored' : 'Record route'}
-          </button>
+          {isStreetWalkOnly(activeRoute) ? (
+            // Walking along the street between two stations visits neither, so there is nothing to record.
+            <button disabled className="min-h-11 rounded-full bg-slate-200 px-4 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Walk only, nothing to record
+            </button>
+          ) : (
+            <button onClick={props.onRecord} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
+              {routeIsAlreadyComplete(progress, activeRoute) ? 'Already explored' : 'Record route'}
+            </button>
+          )}
         </div>
       </div>
       {chooserOpen && routeOptions.length > 1 && (
@@ -87,7 +94,7 @@ export function RouteActionBar(props: RouteActionBarProps) {
                 <span className="block text-xs opacity-75">
                   {describeRouteDistance(route)}
                   {optionChanges ? ` · ${optionChanges}` : ' · no changes'}
-                  {routeIsAlreadyComplete(progress, route) ? ' · already explored' : ''}
+                  {isStreetWalkOnly(route) ? ' · walk only, nothing to record' : routeIsAlreadyComplete(progress, route) ? ' · already explored' : ''}
                 </span>
               </button>
             );

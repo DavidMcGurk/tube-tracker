@@ -373,6 +373,31 @@ test('the selected route is drawn as a dashed path over the lines, including tra
   await page.locator('.tube-map-viewport').screenshot({ path: `test-results/screens/${testInfo.project.name}/preview-paddington-angel.png` });
 });
 
+test('the Northern line name beside the bend at Lambeth North keeps its background clear of the line', async ({ page }) => {
+  await openMap(page);
+  const crossings = await page.evaluate(() => {
+    const svg = document.querySelector<SVGSVGElement>('.tube-map-viewport svg')!;
+    const labels = [...svg.querySelectorAll('#text #stname > .small text')];
+    const index = labels.findIndex((label) => label.textContent === 'Northern line' && label.querySelector('tspan'));
+    const background = svg.querySelectorAll<SVGRectElement>('#app-line-label-backgrounds rect')[index]!;
+    const toSvg = svg.getScreenCTM()!.inverse().multiply(background.getScreenCTM()!);
+    const { x, y, width, height } = background.getBBox();
+    // Against an 8-unit stroke: a 6-unit travelled line plus a 1-unit gap either side.
+    const paths = [...svg.querySelectorAll<SVGPathElement>('#routes .sedgware path')];
+    paths.forEach((path) => { path.style.strokeWidth = '8px'; });
+    let hits = 0;
+    for (let column = 0; column <= 20; column += 1) {
+      for (let row = 0; row <= 10; row += 1) {
+        const point = new DOMPoint(x + (column / 20) * width, y + (row / 10) * height).matrixTransform(toSvg);
+        if (paths.some((path) => path.isPointInStroke(point))) hits += 1;
+      }
+    }
+    paths.forEach((path) => { path.style.strokeWidth = ''; });
+    return hits;
+  });
+  expect(crossings).toBe(0);
+});
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`line-name labels have backgrounds and legible line colours (${colorScheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme });

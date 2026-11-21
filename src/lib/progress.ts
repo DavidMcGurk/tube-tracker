@@ -81,29 +81,57 @@ export function routeIsAlreadyComplete(progress: Progress, route: RouteResult) {
   return addRouteToProgress(progress, route) === progress;
 }
 
+const isStreetWalk = (link: RouteResult['links'][number]) => link.type === 'walk' && link.kind === 'osi';
+
 /**
- * Stations a journey went through the gates of (its ends, and both ends of out-of-station walks) and stations where
- * it changed without leaving (line changes, and both ends of in-station walks).
+ * The part of a journey that went through stations, as indices into its links. A walk along the street before the
+ * first train or after the last isn't part of it: starting at the "wrong" Edgware Road and walking to the other one
+ * doesn't visit the first. (A walkway behind the gates, like Bank to Monument, is: you entered the first station.)
+ * Null when the journey is only a walk along the street.
+ */
+function getRiddenLinks(route: RouteResult) {
+  let first = 0;
+  let last = route.links.length - 1;
+  while (first <= last && isStreetWalk(route.links[first]!)) first += 1;
+  while (last >= first && isStreetWalk(route.links[last]!)) last -= 1;
+  return first <= last ? { first, last } : null;
+}
+
+/**
+ * Stations a journey went through the gates of (the ends of its ridden part, and both ends of out-of-station walks
+ * within it) and stations where it changed without leaving (line changes, and both ends of in-station walks).
  */
 export function getJourneyStations(route: RouteResult) {
-  const enteredOrExited = [route.path[0], route.path.at(-1)].filter((stationId): stationId is string => Boolean(stationId));
+  const ridden = getRiddenLinks(route);
+  if (!ridden) return { enteredOrExited: [], changedAt: [] };
+  const enteredOrExited = [route.path[ridden.first], route.path[ridden.last + 1]].filter((stationId): stationId is string => Boolean(stationId));
+  const isRiddenWalk = (from: string, to: string) => route.links.some((link, index) =>
+    link.type === 'walk' && index >= ridden.first && index <= ridden.last && route.path[index] === from && route.path[index + 1] === to);
   const changedAt: string[] = [];
   for (const change of route.changes) {
     if (change.type === 'line') changedAt.push(change.at);
+    else if (!isRiddenWalk(change.from, change.to)) continue;
     else if (change.kind === 'osi') enteredOrExited.push(change.from, change.to);
     else changedAt.push(change.from, change.to);
   }
   return { enteredOrExited, changedAt: changedAt.filter((stationId) => !enteredOrExited.includes(stationId)) };
 }
 
+/** Whether a journey is only a walk along the street, which visits no station and so has nothing to record. */
+export function isStreetWalkOnly(route: RouteResult) {
+  return getRiddenLinks(route) === null;
+}
+
 /** Returns the same object when the route adds nothing new, so callers can compare by reference. */
 export function addRouteToProgress(progress: Progress, route: RouteResult): Progress {
-  if (route.links.length === 0) return progress;
+  const ridden = getRiddenLinks(route);
+  if (!ridden) return progress;
 
   const { enteredOrExited, changedAt } = getJourneyStations(route);
+  const riddenWalkIds = route.links.slice(ridden.first, ridden.last + 1).flatMap((link) => (link.type === 'walk' ? [link.id] : []));
   const next: Progress = {
     travelledSegmentIDs: appendUnique(progress.travelledSegmentIDs, route.sections.map((section) => section.id)),
-    walkedLinkIDs: appendUnique(progress.walkedLinkIDs, route.walks.map((walk) => walk.id)),
+    walkedLinkIDs: appendUnique(progress.walkedLinkIDs, riddenWalkIds),
     stationsEnteredOrExitedIDs: appendUnique(progress.stationsEnteredOrExitedIDs, enteredOrExited),
     stationsChangedAtIDs: appendUnique(progress.stationsChangedAtIDs, changedAt)
   };

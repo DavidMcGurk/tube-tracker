@@ -129,6 +129,12 @@ const ELIZABETH_ABBEY_WOOD = ['whitechapel', 'canary_wharf', 'custom_house_for_e
 const combinations = (starts: readonly (readonly string[])[], ends: readonly (readonly (readonly string[])[])[]) =>
   starts.flatMap((start) => ends.map((end): LineService => [start, ...end]));
 
+/**
+ * Lines whose services are parts of one continuous train, split only so a route can't loop back on itself: a Circle
+ * line train carries on round the loop, so nobody changes between its two services.
+ */
+export const continuousServiceLines: ReadonlySet<string> = new Set(['circle']);
+
 export const lineServices: Readonly<Record<string, readonly LineService[]>> = {
   central: combinations([CENTRAL_WEST_RUISLIP, CENTRAL_EALING], [[CENTRAL_TRUNK, CENTRAL_EPPING], [CENTRAL_TRUNK, CENTRAL_HAINAULT]]),
   circle: [

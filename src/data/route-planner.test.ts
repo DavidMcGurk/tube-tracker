@@ -74,6 +74,52 @@ describe('route planner on the real network', () => {
     expect(top?.changes.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('also offers changing trains at a junction where some trains do not go your way', () => {
+    // Balham to Goodge Street: straight through on a Charing Cross-branch train, or a Bank-branch train to Kennington.
+    const [direct, viaKennington] = findRoutes('balham', 'goodge_street', 30);
+    expect(direct?.changes).toEqual([]);
+    expect(legs(viaKennington)).toEqual(['northern', 'northern']);
+    expect(viaKennington?.changes).toEqual([{ type: 'line', at: 'kennington' }]);
+    expect(viaKennington?.links.map((link) => link.id)).toEqual(direct?.links.map((link) => link.id));
+    expect(viaKennington?.key).not.toBe(direct?.key);
+  });
+
+  it('does not offer a junction change when every train you could arrive on continues your way', () => {
+    // Every train from Battersea Power Station carries on through Kennington to the Charing Cross branch.
+    const options = findRoutes('battersea_power_station', 'goodge_street', 30);
+    expect(options[0]?.changes).toEqual([]);
+    expect(options.some((option) => option.changes.some((change) => change.type === 'line' && change.at === 'kennington'))).toBe(false);
+  });
+
+  it('never offers a change between the two halves of the Circle line, which are one train', () => {
+    for (const [from, to, station] of [['tower_hill', 'edgware_road_circle', 'baker_street'], ['notting_hill_gate', 'edgware_road_circle', 'bayswater']]) {
+      const options = findRoutes(from!, to!, 30);
+      const changesThere = options.filter((option) => option.legs.every((leg) => leg.type === 'ride' && leg.lineId === 'circle')
+        && option.changes.some((change) => change.type === 'line' && change.at === station));
+      expect(changesThere, `${from} → ${to}`).toEqual([]);
+    }
+  });
+
+  it('never has a Heathrow Terminal 4 loop train run backwards to make a junction change', () => {
+    // From Hatton Cross, Terminal 4 trains go via Terminal 4 first, so none reaches Terminals 2 & 3 directly.
+    const options = findRoutes('hatton_cross', 'heathrow_terminal_5', 30);
+    const direct = options.filter((option) => option.path.join(',') === 'hatton_cross,heathrow_terminals_2_3,heathrow_terminal_5');
+    expect(direct.map((option) => option.changes)).toEqual([[]]);
+  });
+
+  it('offers only a few junction changes, so they do not crowd out other routes', () => {
+    const options = findRoutes('baker_street', 'amersham', 30);
+    const sectionsOf = (route: RouteResult) => route.links.map((link) => link.id).join('|');
+    const direct = new Set(options.filter((option) => option.changes.length === 0).map(sectionsOf));
+    const junctionChanges = options.filter((option) => option.changes.length > 0 && direct.has(sectionsOf(option)));
+    expect(junctionChanges.length).toBeGreaterThan(0);
+    expect(junctionChanges.length).toBeLessThanOrEqual(3);
+    // The genuinely different route is still near the top.
+    const finchleyRoad = options.findIndex((option) => option.legs.some((leg) => leg.type === 'ride' && leg.lineId === 'jubilee'));
+    expect(finchleyRoad).toBeGreaterThanOrEqual(0);
+    expect(finchleyRoad).toBeLessThan(6);
+  });
+
   it('counts switching between Northern line branches as a change', () => {
     const viaBankThenCharingCross = findRoutes('golders_green', 'kennington', 30)
       .find((route) => route.sections.some((section) => section.id === 'northern_camden_town_euston')

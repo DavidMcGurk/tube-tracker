@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { AppLogo } from './components/AppLogo';
 import { InstallPrompt } from './components/InstallPrompt';
 import { MapView } from './components/MapView';
 import { ResetDialog } from './components/ResetDialog';
@@ -13,7 +14,6 @@ import { useTheme } from './hooks/useTheme';
 import type { RouteResult } from './lib/types';
 
 type TabName = 'map' | 'stats' | 'settings';
-const APP_ICON_URL = `${import.meta.env.BASE_URL}favicon.svg`;
 const TABS: ReadonlyArray<{ id: TabName; label: string }> = [
   { id: 'map', label: 'Map' },
   { id: 'stats', label: 'Statistics' },
@@ -55,7 +55,7 @@ function App() {
         */}
         <div className="mx-auto flex max-w-[70rem] items-center justify-between">
           <h1 className="flex items-center gap-2.5 text-xl font-semibold">
-            <img src={APP_ICON_URL} alt="" width="32" height="32" className="h-8 w-8 rounded-lg" />
+            <AppLogo className="app-logo h-5 w-10 shrink-0" />
             Tube Tracker
           </h1>
           <div className="flex items-center gap-2">

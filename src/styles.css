@@ -46,6 +46,11 @@
   --tt-line-northern: #000;
   --tt-label-hover: #1d4ed8;
 
+  /* The header logo, drawn straight onto the header: a dark ring keeps its white junction visible on white. */
+  --tt-logo-travelled: #eab308;
+  --tt-logo-untravelled: #94a3b8;
+  --tt-logo-junction-ring: #0f172a;
+
   /* Map surfaces. */
   --tt-map-background: #fff;
   --tt-fullscreen-background: #f1f5f9;
@@ -69,6 +74,9 @@ html[data-theme='dark'] {
   --tt-label-changed: #c4b5fd;
   --tt-label-hover: #93c5fd;
   --tt-map-background: #0f172a;
+  --tt-logo-travelled: #facc15;
+  --tt-logo-untravelled: #475569;
+  --tt-logo-junction-ring: transparent;
 }
 
 /* ---------------------------------------------------------------- App shell */
