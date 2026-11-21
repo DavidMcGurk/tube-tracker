@@ -48,8 +48,8 @@ export interface RouteResult {
   changes: readonly RouteChange[];
   trackDistance: number;
   walkDistance: number;
-  /** Set when another option rides the same lines with the same changes: a station only this route passes. */
-  via?: string;
+  /** Set when other options ride the same lines with the same changes: stations that tell this route apart from them. */
+  via?: readonly string[];
 }
 
 export type StationState = 'entered' | 'changed' | 'visited' | 'neutral';

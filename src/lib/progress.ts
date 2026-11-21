@@ -8,6 +8,9 @@ export const EMPTY_PROGRESS: Progress = {
   stationsChangedAtIDs: []
 };
 
+const LEGACY_BANK_MONUMENT_SECTION = 'bank_monument_interchange';
+const BANK_MONUMENT_WALK = 'isi_bank_monument';
+
 function knownIds(value: unknown, isKnown: (id: string) => boolean): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((id): id is string => typeof id === 'string' && isKnown(id)))];
@@ -21,9 +24,13 @@ export function sanitizeProgress(value: unknown): Progress {
   if (typeof value !== 'object' || value === null) return EMPTY_PROGRESS;
   const record = value as Partial<Record<keyof Progress, unknown>>;
   const isStation = (id: string) => getStationById(id) !== undefined;
+  // Before walking interchanges existed, the Bank–Monument walkway was stored as a track section.
+  const legacyWalks = Array.isArray(record.travelledSegmentIDs) && record.travelledSegmentIDs.includes(LEGACY_BANK_MONUMENT_SECTION)
+    ? [BANK_MONUMENT_WALK]
+    : [];
   return {
     travelledSegmentIDs: knownIds(record.travelledSegmentIDs, (id) => getSectionById(id) !== undefined),
-    walkedLinkIDs: knownIds(record.walkedLinkIDs, (id) => getWalkLinkById(id) !== undefined),
+    walkedLinkIDs: knownIds([...(Array.isArray(record.walkedLinkIDs) ? record.walkedLinkIDs : []), ...legacyWalks], (id) => getWalkLinkById(id) !== undefined),
     stationsEnteredOrExitedIDs: knownIds(record.stationsEnteredOrExitedIDs, isStation),
     stationsChangedAtIDs: knownIds(record.stationsChangedAtIDs, isStation)
   };
@@ -69,10 +76,9 @@ function appendUnique(existing: string[], additions: readonly string[]): string[
   return added.length > 0 ? [...existing, ...added] : existing;
 }
 
+/** True when recording the route would add nothing: no new track, walks, or visited or changed-at stations. */
 export function routeIsAlreadyComplete(progress: Progress, route: RouteResult) {
-  const { travelledSectionIds, walkedLinkIds } = getProgressIndex(progress);
-  return route.sections.every((section) => travelledSectionIds.has(section.id))
-    && route.walks.every((walk) => walkedLinkIds.has(walk.id));
+  return addRouteToProgress(progress, route) === progress;
 }
 
 /**

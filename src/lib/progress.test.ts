@@ -26,6 +26,14 @@ describe('recording journeys', () => {
     expect(routeIsAlreadyComplete(progress, journey)).toBe(true);
   });
 
+  it('only reports a journey as already explored when recording it would add nothing', () => {
+    const progress = addRouteToProgress(EMPTY_PROGRESS, route('paddington', 'waterloo'));
+    const sameTrackNewStations = route('oxford_circus', 'embankment');
+    expect(sameTrackNewStations.sections.every((section) => progress.travelledSegmentIDs.includes(section.id))).toBe(true);
+    expect(routeIsAlreadyComplete(progress, sameTrackNewStations)).toBe(false);
+    expect(routeIsAlreadyComplete(progress, route('paddington', 'waterloo'))).toBe(true);
+  });
+
   it('records journey ends as entered/exited and line changes as changed', () => {
     const journey = route('paddington', 'london_bridge');
     const lineChanges = journey.changes.flatMap((change) => (change.type === 'line' ? [change.at] : []));
@@ -141,7 +149,7 @@ describe('sanitizeProgress', () => {
       travelledSegmentIDs: ['bank_monument_interchange'],
       stationsEnteredOrExitedIDs: ['bank'],
       stationsChangedAtIDs: []
-    })).toEqual({ ...EMPTY_PROGRESS, stationsEnteredOrExitedIDs: ['bank'] });
+    })).toEqual({ ...EMPTY_PROGRESS, walkedLinkIDs: ['isi_bank_monument'], stationsEnteredOrExitedIDs: ['bank'] });
   });
 
   it('drops unknown ids, non-strings and duplicates', () => {

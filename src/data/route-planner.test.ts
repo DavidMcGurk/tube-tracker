@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { describeRouteChanges, describeRouteTitle } from '../lib/route-format';
 import type { RouteResult } from '../lib/types';
 import { lineServices } from './line-services';
 import { findRoutes, network, sections, stations, walkLinks } from './network';
@@ -49,7 +50,28 @@ describe('route planner on the real network', () => {
   it('labels same-line options that take different paths', () => {
     const options = findRoutes('golders_green', 'kennington', 30).filter((route) => route.changes.length === 0);
     expect(options.length).toBeGreaterThanOrEqual(2);
-    expect(options.slice(0, 2).map((route) => route.via)).toEqual(['mornington_crescent', 'kings_cross']);
+    expect(options.slice(0, 2).map((route) => route.via?.[0])).toEqual(['mornington_crescent', 'kings_cross']);
+  });
+
+  it('describes every option so that no two look the same', () => {
+    for (const [from, to] of [['amersham', 'archway'], ['romford', 'ruislip_manor'], ['stratford', 'canary_wharf'], ['golders_green', 'kennington']] as const) {
+      const descriptions = findRoutes(from, to, 30).map((route) => `${describeRouteTitle(route)} | ${describeRouteChanges(route)}`);
+      expect(new Set(descriptions).size, `${from} → ${to}`).toBe(descriptions.length);
+    }
+  });
+
+  it.each([
+    ['brentwood', 'canary_wharf'],
+    ['uxbridge', 'heathrow_terminal_5'],
+    ['watford', 'uxbridge'],
+    ['chingford', 'enfield_town'],
+    ['wimbledon', 'richmond'],
+    ['ealing_broadway', 'west_ruislip'],
+    ['crystal_palace', 'west_croydon'],
+    ['heathrow_terminal_5', 'reading']
+  ] as const)('needs a change to reverse at a branch junction (%s → %s)', (from, to) => {
+    const [top] = findRoutes(from, to, 30);
+    expect(top?.changes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('counts switching between Northern line branches as a change', () => {
@@ -111,6 +133,17 @@ describe('network data integrity', () => {
       expect(walk.mapPath, walk.id).toMatch(/^M\s*[\d.]+[ ,][\d.]+/);
     }
     expect(network.getWalkLink('osi_camden_town_camden_road')?.kind).toBe('osi');
+  });
+
+  it('covers every section of a line that has services, apart from known shuttles', () => {
+    const shuttles = new Set(['northern_finchley_central_mill_hill_east']);
+    const covered = new Set(Object.entries(lineServices).flatMap(([lineId, services]) => services.flatMap((segments) =>
+      segments.flatMap((stops) => stops.slice(1).map((stop, index) => `${lineId}:${[stops[index], stop].sort().join('~')}`)))));
+    const uncovered = sections
+      .filter((section) => section.lineId in lineServices && !shuttles.has(section.id))
+      .filter((section) => !covered.has(`${section.lineId}:${[section.from, section.to].sort().join('~')}`))
+      .map((section) => section.id);
+    expect(uncovered).toEqual([]);
   });
 
   it('describes each line service with consecutive stations joined by that line', () => {

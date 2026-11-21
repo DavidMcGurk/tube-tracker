@@ -37,7 +37,10 @@ export function describeRouteChanges(route: RouteResult, { capitalise = true } =
 /** e.g. "Northern → Walk", with the distinguishing station when another option rides the same legs. */
 export function describeRouteTitle(route: RouteResult) {
   const legs = getRouteLegNames(route).join(' → ');
-  return route.via ? `${legs} (via ${getStationName(route.via)})` : legs;
+  if (!route.via?.length) return legs;
+  const names = route.via.map(getStationName);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  return `${legs} (via ${list})`;
 }
 
 export function formatDistance(metres: number) {

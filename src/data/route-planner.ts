@@ -498,7 +498,10 @@ export class RoutePlanner {
   }
 }
 
-/** For options that ride the same lines with the same changes, records a station that tells them apart. */
+/**
+ * For options that ride the same lines with the same changes, records stations that tell each one apart from every
+ * other such option (the fewest needed, in route order).
+ */
 function markDistinguishingStations(routes: RouteResult[]): RouteResult[] {
   const legSignature = (route: RouteResult) => route.legs
     .map((leg) => `${leg.type === 'walk' ? 'walk' : leg.lineId}:${leg.from}>${leg.to}`)
@@ -509,10 +512,16 @@ function markDistinguishingStations(routes: RouteResult[]): RouteResult[] {
     groups.set(signature, [...(groups.get(signature) ?? []), route]);
   }
   return routes.map((route) => {
-    const group = groups.get(legSignature(route))!;
-    if (group.length < 2) return route;
-    const reference = group[0] === route ? group[1]! : group[0]!;
-    const via = route.path.slice(1, -1).find((stationId) => !reference.path.includes(stationId));
-    return via ? { ...route, via } : route;
+    const others = groups.get(legSignature(route))!.filter((other) => other !== route);
+    if (others.length === 0) return route;
+    const interior = route.path.slice(1, -1);
+    const via: string[] = [];
+    for (const other of others) {
+      if (via.some((stationId) => !other.path.includes(stationId))) continue;
+      const distinguishing = interior.find((stationId) => !other.path.includes(stationId));
+      if (distinguishing) via.push(distinguishing);
+    }
+    via.sort((a, b) => interior.indexOf(a) - interior.indexOf(b));
+    return via.length > 0 ? { ...route, via } : route;
   });
 }
