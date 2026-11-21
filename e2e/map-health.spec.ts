@@ -414,6 +414,49 @@ test('each line of a two-line label gets a background that fits it, joined to th
   }
 });
 
+test('no travelled line touches the letters of a line name', async ({ page }) => {
+  await openMap(page);
+  await seedTravelledSections(page);
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator(TRAVELLED_LINE_PATHS).first()).toBeAttached();
+  const touching = await page.evaluate((selector) => {
+    const svg = document.querySelector<SVGSVGElement>('.tube-map-viewport svg')!;
+    const toRoot = svg.getScreenCTM()!.inverse();
+    const lines = [...svg.querySelectorAll<SVGPathElement>(selector)].map((path) => ({ path, box: path.getBBox() }));
+    // Travelled lines are 6 units wide; test against 6.5 to leave a hairline gap.
+    lines.forEach(({ path }) => { path.style.strokeWidth = '6.5px'; });
+    const labels = [...svg.querySelectorAll<SVGTextElement>('#text #stname > .small text')];
+    const canvas = document.createElement('canvas').getContext('2d')!;
+    const font = getComputedStyle(labels[0]!);
+    canvas.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+    const found: string[] = [];
+    for (const label of labels) {
+      const toSvg = toRoot.multiply(label.getScreenCTM()!);
+      const text = label.textContent!;
+      const points: DOMPoint[] = [];
+      // Each letter's own shape (its ink box), not its character cell, sampled on a grid.
+      for (let char = 0; char < label.getNumberOfChars(); char += 1) {
+        if (/\s/.test(text[char]!)) continue;
+        const start = label.getStartPositionOfChar(char);
+        const metrics = canvas.measureText(text[char]!);
+        const left = start.x - metrics.actualBoundingBoxLeft;
+        const right = start.x + metrics.actualBoundingBoxRight;
+        const top = start.y - metrics.actualBoundingBoxAscent;
+        const bottom = start.y + metrics.actualBoundingBoxDescent;
+        for (let u = 0; u <= 4; u += 1) {
+          for (let v = 0; v <= 4; v += 1) points.push(new DOMPoint(left + (u / 4) * (right - left), top + (v / 4) * (bottom - top)).matrixTransform(toSvg));
+        }
+      }
+      const near = lines.filter(({ box }) => points.some((point) => point.x > box.x - 5 && point.x < box.x + box.width + 5 && point.y > box.y - 5 && point.y < box.y + box.height + 5));
+      if (points.some((point) => near.some(({ path }) => path.isPointInStroke(point)))) found.push(`${text} @ ${label.getAttribute('transform') ?? `${label.getAttribute('x')},${label.getAttribute('y')}`}`);
+    }
+    lines.forEach(({ path }) => { path.style.strokeWidth = ''; });
+    return found;
+  }, TRAVELLED_LINE_PATHS);
+  expect(touching).toEqual([]);
+});
+
 test('the Northern line name beside the bend at Lambeth North keeps its background clear of the line', async ({ page }) => {
   await openMap(page);
   const crossings = await page.evaluate(() => {
