@@ -373,23 +373,67 @@ test('the selected route is drawn as a dashed path over the lines, including tra
   await page.locator('.tube-map-viewport').screenshot({ path: `test-results/screens/${testInfo.project.name}/preview-paddington-angel.png` });
 });
 
+test('each line of a two-line label gets a background that fits it, joined to the next without a notch', async ({ page }) => {
+  await openMap(page);
+  const report = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll<SVGTextElement>('#text #stname > .small text')];
+    return ['Northern line', 'Hammersmith & City line', 'Elizabeth line (rush hour special)'].map((text) => {
+      const index = labels.findIndex((label) => label.textContent === text && label.querySelector('tspan'));
+      const label = labels[index]!;
+      // Where each line's letters start and end, in the label's own coordinates.
+      const letters = new Map<number, { left: number; right: number }>();
+      for (let char = 0; char < label.getNumberOfChars(); char += 1) {
+        if (/\s/.test(label.textContent![char]!)) continue;
+        const extent = label.getExtentOfChar(char);
+        const line = letters.get(Math.round(extent.y)) ?? { left: Infinity, right: -Infinity };
+        letters.set(Math.round(extent.y), { left: Math.min(line.left, extent.x), right: Math.max(line.right, extent.x + extent.width) });
+      }
+      const lines = [...letters.entries()].sort(([a], [b]) => a - b).map(([, line]) => line);
+      const backgrounds = [...document.querySelectorAll<SVGRectElement>(`#app-line-label-backgrounds rect[data-label="${index}"]`)];
+      const boxes = backgrounds.filter((rect) => !rect.hasAttribute('data-join')).sort((a, b) => a.y.baseVal.value - b.y.baseVal.value);
+      const edges = boxes.map((rect) => ({ left: rect.x.baseVal.value + 3, right: rect.x.baseVal.value + rect.width.baseVal.value - 3, top: rect.y.baseVal.value, bottom: rect.y.baseVal.value + rect.height.baseVal.value }));
+      // Between the two lines, just inside the edge they share, the background is solid.
+      const [upper, lower] = edges;
+      const alignedRight = Math.abs(upper!.right - lower!.right) < 0.5;
+      const probe = new DOMPoint(alignedRight ? upper!.right + 2.5 : upper!.left - 2.5, (upper!.bottom + lower!.top) / 2);
+      return {
+        text,
+        offsets: edges.map((edge, line) => Math.max(Math.abs(edge.left - lines[line]!.left), Math.abs(edge.right - lines[line]!.right))),
+        lineCount: lines.length,
+        boxCount: boxes.length,
+        joinedEdge: backgrounds.some((rect) => rect.isPointInFill(probe))
+      };
+    });
+  });
+  for (const label of report) {
+    expect(label.boxCount, label.text).toBe(label.lineCount);
+    expect(label.lineCount, label.text).toBe(2);
+    // Each box spans its own line's letters (plus padding), so there's no empty white beside the shorter line.
+    for (const offset of label.offsets) expect(offset, label.text).toBeLessThan(0.5);
+    expect(label.joinedEdge, label.text).toBe(true);
+  }
+});
+
 test('the Northern line name beside the bend at Lambeth North keeps its background clear of the line', async ({ page }) => {
   await openMap(page);
   const crossings = await page.evaluate(() => {
     const svg = document.querySelector<SVGSVGElement>('.tube-map-viewport svg')!;
     const labels = [...svg.querySelectorAll('#text #stname > .small text')];
     const index = labels.findIndex((label) => label.textContent === 'Northern line' && label.querySelector('tspan'));
-    const background = svg.querySelectorAll<SVGRectElement>('#app-line-label-backgrounds rect')[index]!;
-    const toSvg = svg.getScreenCTM()!.inverse().multiply(background.getScreenCTM()!);
-    const { x, y, width, height } = background.getBBox();
+    const backgrounds = [...svg.querySelectorAll<SVGRectElement>(`#app-line-label-backgrounds rect[data-label="${index}"]`)];
+    // Two lines plus the square piece joining them.
     // Against an 8-unit stroke: a 6-unit travelled line plus a 1-unit gap either side.
     const paths = [...svg.querySelectorAll<SVGPathElement>('#routes .sedgware path')];
     paths.forEach((path) => { path.style.strokeWidth = '8px'; });
-    let hits = 0;
-    for (let column = 0; column <= 20; column += 1) {
-      for (let row = 0; row <= 10; row += 1) {
-        const point = new DOMPoint(x + (column / 20) * width, y + (row / 10) * height).matrixTransform(toSvg);
-        if (paths.some((path) => path.isPointInStroke(point))) hits += 1;
+    let hits = backgrounds.length === 3 ? 0 : -1;
+    for (const background of backgrounds) {
+      const toSvg = svg.getScreenCTM()!.inverse().multiply(background.getScreenCTM()!);
+      const { x, y, width, height } = background.getBBox();
+      for (let column = 0; column <= 20; column += 1) {
+        for (let row = 0; row <= 10; row += 1) {
+          const point = new DOMPoint(x + (column / 20) * width, y + (row / 10) * height).matrixTransform(toSvg);
+          if (paths.some((path) => path.isPointInStroke(point))) hits += 1;
+        }
       }
     }
     paths.forEach((path) => { path.style.strokeWidth = ''; });
@@ -404,7 +448,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await openMap(page);
     const labelCount = await page.locator('#text #stname > .small text').count();
     expect(labelCount).toBeGreaterThan(50);
-    await expect(page.locator('#app-line-label-backgrounds rect')).toHaveCount(labelCount);
+    // One background per line of text (the three two-line labels have two each, joined by a square piece).
+    await expect(page.locator('#app-line-label-backgrounds rect:not([data-join])')).toHaveCount(labelCount + 3);
+    await expect(page.locator('#app-line-label-backgrounds rect[data-join]')).toHaveCount(3);
     await expect.poll(() => page.evaluate(() => {
       const style = (text: string) => {
         const label = [...document.querySelectorAll('#text #stname > .small text')].find((element) => element.textContent === text)!;
