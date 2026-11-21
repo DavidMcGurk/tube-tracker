@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { findRoute, lines, sections } from '../data/network';
+import { findRoute, findRoutes, lines, sections } from '../data/network';
 import {
   addRouteToProgress,
   EMPTY_PROGRESS,
   getJourneyStations,
   getStationState,
+  isStreetWalkOnly,
   routeIsAlreadyComplete,
   sortLineProgress,
   sanitizeProgress,
@@ -47,13 +48,13 @@ describe('recording journeys', () => {
   });
 
   it('treats both ends of an out-of-station interchange as entered/exited and records the walk, not as track', () => {
-    const journey = route('golders_green', 'camden_road');
+    const journey = route('golders_green', 'caledonian_road_barnsbury');
     expect(journey.walks.map((walk) => walk.id)).toEqual(['osi_camden_town_camden_road']);
 
     const progress = addRouteToProgress(EMPTY_PROGRESS, journey);
     expect(progress.walkedLinkIDs).toEqual(['osi_camden_town_camden_road']);
     expect(progress.travelledSegmentIDs).toEqual(journey.sections.map((section) => section.id));
-    expect(progress.stationsEnteredOrExitedIDs).toEqual(expect.arrayContaining(['golders_green', 'camden_road', 'camden_town']));
+    expect(progress.stationsEnteredOrExitedIDs).toEqual(expect.arrayContaining(['golders_green', 'caledonian_road_barnsbury', 'camden_road', 'camden_town']));
     expect(progress.stationsChangedAtIDs).toEqual([]);
     expect(getStationState('camden_town', progress)).toBe('entered');
   });
@@ -61,9 +62,47 @@ describe('recording journeys', () => {
   it('treats both ends of an in-station interchange as changes', () => {
     const journey = {
       path: ['st_paul_s', 'bank', 'monument', 'tower_hill'],
+      links: [{ type: 'track' }, { type: 'walk', id: 'isi_bank_monument', kind: 'isi' }, { type: 'track' }],
       changes: [{ type: 'walk', from: 'bank', to: 'monument', kind: 'isi' }]
     } as unknown as RouteResult;
     expect(getJourneyStations(journey)).toEqual({ enteredOrExited: ['st_paul_s', 'tower_hill'], changedAt: ['bank', 'monument'] });
+  });
+
+  it('does not visit the station a journey walks from along the street before its first train, or to after its last', () => {
+    // One way from the Bakerloo line's Edgware Road onto the Circle line is to walk to the other Edgware Road.
+    const startsWithWalk = findRoutes('edgware_road_bakerloo', 'notting_hill_gate', 30).find((option) => option.links[0]?.type === 'walk');
+    expect(startsWithWalk?.walks.map((walk) => walk.id)).toEqual(['osi_edgware_road']);
+    const progress = addRouteToProgress(EMPTY_PROGRESS, startsWithWalk!);
+    expect(progress.stationsEnteredOrExitedIDs).toEqual(['edgware_road_circle', 'notting_hill_gate']);
+    expect(progress.walkedLinkIDs).toEqual([]);
+    expect(progress.stationsChangedAtIDs).toEqual([]);
+    expect(getStationState('edgware_road_bakerloo', progress)).toBe('neutral');
+
+    const endsWithWalk = findRoutes('notting_hill_gate', 'edgware_road_bakerloo', 30).find((option) => option.links.at(-1)?.type === 'walk');
+    expect(endsWithWalk).toBeDefined();
+    expect(getJourneyStations(endsWithWalk!)).toEqual({ enteredOrExited: ['notting_hill_gate', 'edgware_road_circle'], changedAt: [] });
+  });
+
+  it('records nothing for a journey that is only a walk along the street', () => {
+    const walk = route('edgware_road_bakerloo', 'edgware_road_circle');
+    expect(walk.walks.map((link) => [link.id, link.kind])).toEqual([['osi_edgware_road', 'osi']]);
+    expect(isStreetWalkOnly(walk)).toBe(true);
+    expect(addRouteToProgress(EMPTY_PROGRESS, walk)).toBe(EMPTY_PROGRESS);
+  });
+
+  it('keeps a walkway behind the gates at either end: the first station was entered, the other changed at', () => {
+    // Bank to Tower Hill starts along the walkway from Bank to Monument, inside the stations.
+    const startsWithWalkway = findRoutes('bank', 'tower_hill', 30).find((option) => option.links[0]?.type === 'walk');
+    expect(startsWithWalkway?.walks.map((walk) => walk.id)).toEqual(['isi_bank_monument']);
+    const progress = addRouteToProgress(EMPTY_PROGRESS, startsWithWalkway!);
+    expect(progress.stationsEnteredOrExitedIDs).toEqual(['bank', 'tower_hill']);
+    expect(progress.stationsChangedAtIDs).toEqual(['monument']);
+    expect(progress.walkedLinkIDs).toEqual(['isi_bank_monument']);
+
+    // On its own, the walkway goes in through one station's gates and out through the other's.
+    const walkwayOnly = route('bank', 'monument');
+    expect(isStreetWalkOnly(walkwayOnly)).toBe(false);
+    expect(getJourneyStations(walkwayOnly)).toEqual({ enteredOrExited: ['bank', 'monument'], changedAt: [] });
   });
 
   it('keeps stations passed through distinct from journey ends and changes', () => {
@@ -153,7 +192,8 @@ describe('sortLineProgress', () => {
 
 describe('sanitizeProgress', () => {
   it('accepts a valid record unchanged', () => {
-    const progress = addRouteToProgress(EMPTY_PROGRESS, route('golders_green', 'camden_road'));
+    // A journey with a walk between trains, so every field of the record is filled in.
+    const progress = addRouteToProgress(EMPTY_PROGRESS, route('golders_green', 'caledonian_road_barnsbury'));
     expect(sanitizeProgress(progress)).toEqual(progress);
   });
 
