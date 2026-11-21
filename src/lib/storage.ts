@@ -1,7 +1,7 @@
 import Dexie, { liveQuery, type Table } from 'dexie';
 import { sanitizeInstallPromptState, type InstallPromptState } from './install-prompt';
 import { sanitizeProgress } from './progress';
-import type { Progress, Theme } from './types';
+import type { Progress, ProgressStyle, Theme } from './types';
 
 interface ProgressRecord {
   id: 'current';
@@ -19,7 +19,12 @@ interface InstallPromptSettingRecord {
   value: InstallPromptState;
 }
 
-type SettingRecord = ThemeSettingRecord | InstallPromptSettingRecord;
+interface ProgressStyleSettingRecord {
+  id: 'progressStyle';
+  value: ProgressStyle;
+}
+
+type SettingRecord = ThemeSettingRecord | InstallPromptSettingRecord | ProgressStyleSettingRecord;
 
 class TubeTrackerDB extends Dexie {
   progress!: Table<ProgressRecord, ProgressRecord['id']>;
@@ -60,32 +65,58 @@ export async function updateProgress(change: (current: Progress) => Progress): P
 }
 
 /*
- * The theme is also mirrored in localStorage so index.html can apply it before the app loads (no flash of the
- * wrong theme); IndexedDB stays the source of truth.
+ * Display settings are also mirrored in localStorage so they can be applied before IndexedDB answers (index.html
+ * applies the theme before the app loads, so there's no flash of the wrong theme); IndexedDB stays the source of truth.
  */
 export const THEME_STORAGE_KEY = 'tube-tracker-theme';
+const PROGRESS_STYLE_STORAGE_KEY = 'tube-tracker-progress-style';
 
-export function readThemeSync(): Theme | null {
+function readMirror<T extends string>(key: string, allowed: readonly T[]): T | null {
   try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : null;
+    const stored = localStorage.getItem(key);
+    return allowed.find((value) => value === stored) ?? null;
   } catch {
     return null;
   }
 }
 
+function writeMirror(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private browsing can block localStorage; IndexedDB still records the choice.
+  }
+}
+
+const THEMES: readonly Theme[] = ['light', 'dark', 'system'];
+const PROGRESS_STYLES: readonly ProgressStyle[] = ['lines', 'band'];
+
+export function readThemeSync(): Theme | null {
+  return readMirror(THEME_STORAGE_KEY, THEMES);
+}
+
 export async function loadTheme(): Promise<Theme> {
   const record = await db.settings.get('theme');
-  return record?.id === 'theme' ? record.value : 'system';
+  return record?.id === 'theme' && THEMES.includes(record.value) ? record.value : 'system';
 }
 
 export async function saveTheme(theme: Theme) {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    // Private browsing can block localStorage; IndexedDB below still records the choice.
-  }
+  writeMirror(THEME_STORAGE_KEY, theme);
   await db.settings.put({ id: 'theme', value: theme });
+}
+
+export function readProgressStyleSync(): ProgressStyle | null {
+  return readMirror(PROGRESS_STYLE_STORAGE_KEY, PROGRESS_STYLES);
+}
+
+export async function loadProgressStyle(): Promise<ProgressStyle | null> {
+  const record = await db.settings.get('progressStyle');
+  return record?.id === 'progressStyle' && PROGRESS_STYLES.includes(record.value) ? record.value : null;
+}
+
+export async function saveProgressStyle(style: ProgressStyle) {
+  writeMirror(PROGRESS_STYLE_STORAGE_KEY, style);
+  await db.settings.put({ id: 'progressStyle', value: style });
 }
 
 async function readInstallPromptState() {

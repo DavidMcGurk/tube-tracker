@@ -26,13 +26,16 @@ export const TRAVELLED_LAYER_ID = 'app-travelled-sections';
 export const PREVIEW_LAYER_ID = 'app-route-preview-sections';
 const CASING_LAYER_ID = 'app-highlight-casing';
 export const LINE_LABEL_BACKGROUND_LAYER_ID = 'app-line-label-backgrounds';
+/** A copy of the map's own route artwork, masked to the travelled track (the "bold lines" progress style). */
+export const TRAVELLED_ROUTES_ID = 'app-travelled-routes';
+const TRAVELLED_MASK_ID = 'app-travelled-mask';
+/**
+ * Covers a line (5 units wide, 5.5 with the Circle and H&C casing) without revealing more than a hairline of the
+ * line running alongside it (5 units away, centre to centre).
+ */
+const TRAVELLED_MASK_WIDTH = 5.5;
 
 export type HighlightKind = 'travelled' | 'preview';
-
-const HIGHLIGHT_LAYERS: Record<HighlightKind, { layerId: string; className: string }> = {
-  travelled: { layerId: TRAVELLED_LAYER_ID, className: 'app-travelled-section' },
-  preview: { layerId: PREVIEW_LAYER_ID, className: 'app-route-preview-section' }
-};
 
 /**
  * Geometry measured from one SVG document, in user units. It does not depend on zoom or scroll, so it is kept for the
@@ -223,23 +226,63 @@ function ensureLayer(svg: SVGSVGElement, layerId: string, before: Element) {
 }
 
 /**
- * Creates the app's layers beneath the map's route lines, bottom to top: route preview, travelled sections, a casing
- * strip that separates every highlight from the line drawn over it (so yellow lines stay visible on the yellow band),
- * and the backgrounds behind line-name labels.
+ * Creates the app's layers around the map's route lines, bottom to top:
+ * - beneath the lines: the yellow travelled band, its casing strip and the line-name label backgrounds;
+ * - the map's own lines (#routes), shown thin when the "bold lines" progress style is on (see styles.css);
+ * - a full-strength copy of the lines masked to the travelled track (the "bold lines" style);
+ * - the selected route, drawn on top as a dashed path.
+ * Station markers and names stay above all of these.
  */
 export function ensureHighlightLayers(svg: SVGSVGElement) {
   const routes = svg.querySelector('#routes');
-  if (!routes) return;
+  if (!routes || svg.querySelector(`#${PREVIEW_LAYER_ID}`)) return;
   const labelBackgrounds = ensureLayer(svg, LINE_LABEL_BACKGROUND_LAYER_ID, routes);
   const casing = ensureLayer(svg, CASING_LAYER_ID, labelBackgrounds);
-  const travelled = ensureLayer(svg, TRAVELLED_LAYER_ID, casing);
-  ensureLayer(svg, PREVIEW_LAYER_ID, travelled);
-  for (const kind of Object.keys(HIGHLIGHT_LAYERS) as HighlightKind[]) {
-    if (casing.querySelector(`[data-source="${kind}"]`)) continue;
-    const group = svg.ownerDocument.createElementNS(SVG_NS, 'g');
-    group.setAttribute('data-source', kind);
-    casing.appendChild(group);
+  ensureLayer(svg, TRAVELLED_LAYER_ID, casing);
+
+  // The travelled copy: ids are removed so they stay unique (its <use> elements still point at the originals).
+  const travelledRoutes = routes.cloneNode(true) as SVGGElement;
+  travelledRoutes.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+  travelledRoutes.id = TRAVELLED_ROUTES_ID;
+  travelledRoutes.setAttribute('aria-hidden', 'true');
+  travelledRoutes.setAttribute('mask', `url(#${TRAVELLED_MASK_ID})`);
+  routes.after(travelledRoutes);
+
+  const mask = svg.ownerDocument.createElementNS(SVG_NS, 'mask');
+  mask.id = TRAVELLED_MASK_ID;
+  const { x, y, width, height } = svg.viewBox.baseVal;
+  for (const [name, value] of Object.entries({ maskUnits: 'userSpaceOnUse', x: x - 100, y: y - 100, width: width + 200, height: height + 200 })) {
+    mask.setAttribute(name, String(value));
   }
+  travelledRoutes.before(mask);
+
+  const preview = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+  preview.id = PREVIEW_LAYER_ID;
+  preview.setAttribute('aria-hidden', 'true');
+  for (const part of ['casing', 'route']) {
+    const group = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+    group.setAttribute('data-part', part);
+    preview.appendChild(group);
+  }
+  travelledRoutes.after(preview);
+}
+
+/** Target spacing of the dots along a drawn walk, in map units. */
+const WALK_DOT_SPACING = 12;
+const walkLengths = new Map<string, number>();
+
+/**
+ * Spaces a walk's dots evenly from end to end, with at least one dot between the ends: many walks are shorter than
+ * a fixed spacing, which would leave their only dots hidden under the station markers.
+ */
+function spaceWalkDots(path: SVGPathElement, linkId: string) {
+  let length = walkLengths.get(linkId);
+  if (length === undefined) {
+    length = path.getTotalLength();
+    walkLengths.set(linkId, length);
+  }
+  const gaps = Math.max(2, Math.round(length / WALK_DOT_SPACING));
+  path.style.strokeDasharray = `0 ${(length / gaps).toFixed(2)}`;
 }
 
 function createPath(document: Document, className: string, linkId: string, pathData: string) {
@@ -251,30 +294,54 @@ function createPath(document: Document, className: string, linkId: string, pathD
 }
 
 /**
- * Draws the given links as travelled or preview highlights: track sections follow the map's own line geometry (with
- * a casing copy), and walking interchanges follow their drawn connector. `documentKey` identifies the SVG document
- * so measured geometry can be reused across re-mounts.
+ * Draws the given links. Travelled track is drawn both as the yellow band (with its casing) and into the mask that
+ * reveals the full-strength copy of the lines; CSS shows whichever progress style is chosen. The selected route is a
+ * dashed path with a white edge. Track follows the map's own line geometry; walks follow their drawn connector.
+ * `documentKey` identifies the SVG document so measured geometry can be reused across re-mounts.
  */
 export function renderLinkHighlights(svg: SVGSVGElement, documentKey: string, kind: HighlightKind, linkIds: readonly string[]) {
-  const { layerId, className } = HIGHLIGHT_LAYERS[kind];
-  const layer = svg.querySelector<SVGGElement>(`#${layerId}`);
-  const casing = svg.querySelector<SVGGElement>(`#${CASING_LAYER_ID} [data-source="${kind}"]`);
-  if (!layer || !casing) return;
-  layer.replaceChildren();
-  casing.replaceChildren();
+  const targets = kind === 'travelled'
+    ? {
+      main: svg.querySelector<SVGGElement>(`#${TRAVELLED_LAYER_ID}`),
+      casing: svg.querySelector<SVGGElement>(`#${CASING_LAYER_ID}`),
+      mask: svg.querySelector<SVGMaskElement>(`#${TRAVELLED_MASK_ID}`)
+    }
+    : {
+      main: svg.querySelector<SVGGElement>(`#${PREVIEW_LAYER_ID} [data-part="route"]`),
+      casing: svg.querySelector<SVGGElement>(`#${PREVIEW_LAYER_ID} [data-part="casing"]`),
+      mask: null
+    };
+  if (!targets.main || !targets.casing) return;
+  for (const target of [targets.main, targets.casing, targets.mask]) target?.replaceChildren();
   if (linkIds.length === 0) return;
 
+  const className = kind === 'travelled' ? 'app-travelled-section' : 'app-route-preview-section';
+  const casingClassName = kind === 'travelled' ? 'app-highlight-casing' : 'app-route-preview-casing';
+  const document = svg.ownerDocument;
   const geometry = getGeometry(documentKey);
   for (const linkId of new Set(linkIds)) {
     const link = network.getLink(linkId);
     if (!link) continue;
     if (link.type === 'walk') {
-      layer.appendChild(createPath(svg.ownerDocument, `${className} app-walk-link`, link.id, link.mapPath));
+      const walk = targets.main.appendChild(createPath(document, `${className} app-walk-link`, link.id, link.mapPath));
+      spaceWalkDots(walk, link.id);
+      // The selected route's walks get an edge too, like its track.
+      if (kind === 'preview') {
+        const edge = targets.casing.appendChild(createPath(document, `${casingClassName} app-walk-link`, link.id, link.mapPath));
+        edge.style.strokeDasharray = walk.style.strokeDasharray;
+      }
       continue;
     }
     const pathData = traceSection(svg, geometry, link);
     if (!pathData) continue;
-    layer.appendChild(createPath(svg.ownerDocument, className, link.id, pathData));
-    casing.appendChild(createPath(svg.ownerDocument, 'app-highlight-casing', link.id, pathData));
+    targets.main.appendChild(createPath(document, className, link.id, pathData));
+    targets.casing.appendChild(createPath(document, casingClassName, link.id, pathData));
+    if (targets.mask) {
+      const reveal = createPath(document, 'app-travelled-mask-path', link.id, pathData);
+      for (const [name, value] of Object.entries({ fill: 'none', stroke: '#fff', 'stroke-width': TRAVELLED_MASK_WIDTH, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) {
+        reveal.setAttribute(name, String(value));
+      }
+      targets.mask.appendChild(reveal);
+    }
   }
 }
