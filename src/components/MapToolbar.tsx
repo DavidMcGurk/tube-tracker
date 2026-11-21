@@ -38,7 +38,7 @@ export function MapToolbar(props: MapToolbarProps) {
         <button className={`${toolbarButton} min-w-11 flex-none`} onClick={props.onZoomOut} aria-label="Zoom out" disabled={!props.canZoomOut}>
           −
         </button>
-        <span className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500" aria-label={`Map zoom: ${props.zoom}×`}>
+        <span className="inline-flex w-12 flex-none items-center justify-center self-center text-xs tabular-nums text-slate-500 dark:text-slate-300" aria-label={`Map zoom: ${props.zoom}×`}>
           {props.zoom}×
         </span>
         <button className={`${toolbarButton} min-w-11 flex-none`} onClick={props.onZoomIn} aria-label="Zoom in" disabled={!props.canZoomIn}>

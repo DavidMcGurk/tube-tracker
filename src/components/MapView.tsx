@@ -99,7 +99,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
             </button>
           </div>
         )}
-        {!markup && !mapLoadError && <p role="status" className="mt-3 text-sm text-slate-500">Loading network map...</p>}
+        {!markup && !mapLoadError && <p role="status" className="mt-3 text-sm text-slate-500 dark:text-slate-300">Loading network map...</p>}
         {mapLoadError && (
           <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">Unable to load the network map: {mapLoadError}</p>
         )}

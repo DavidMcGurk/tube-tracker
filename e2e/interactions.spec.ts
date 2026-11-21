@@ -88,3 +88,32 @@ test('long-press inspects a station and drag selects a journey (mouse)', async (
   await expect(page.locator('.route-action-bar')).toContainText('Paddington → Waterloo');
   await expect(page.locator('.map-inspection-panel')).toBeHidden();
 });
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`station labels show their journey state colour consistently (${colorScheme})`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'laptop-1280', 'computed style check runs on one project');
+    await page.emulateMedia({ colorScheme });
+    await openMap(page);
+    await recordJourney(page, testInfo, 'paddington', 'waterloo');
+
+    const expected = colorScheme === 'light'
+      ? { entered: 'rgb(21, 128, 61)', changed: 'rgb(180, 83, 9)' }
+      : { entered: 'rgb(74, 222, 128)', changed: 'rgb(251, 191, 36)' };
+    const readFills = () => page.evaluate(() => {
+      const fillOf = (element: Element | null) => (element ? getComputedStyle(element).fill : null);
+      const label = (stationId: string) => document.querySelector(`#text text[data-app-station-id="${stationId}"]`);
+      const changed = [...document.querySelectorAll('#text text[data-app-state="changed"]')];
+      return {
+        entered: fillOf(label('paddington')),
+        neutral: fillOf(label('upminster')),
+        changed: changed.map((text) => [fillOf(text), ...[...text.querySelectorAll('tspan')].map(fillOf)])
+      };
+    });
+    // Label fills animate briefly, so wait for them to settle.
+    await expect.poll(async () => (await readFills()).entered).toBe(expected.entered);
+    const fills = await readFills();
+    expect(fills.neutral).not.toBe(expected.entered);
+    expect(fills.changed.length).toBeGreaterThan(0);
+    for (const labelFills of fills.changed) expect(new Set(labelFills)).toEqual(new Set([expected.changed]));
+  });
+}
