@@ -6,7 +6,9 @@ export interface TrackSectionRecord {
   distance: number;
 }
 
+/** A stretch of track served by one line between two adjacent stations. */
 export class TrackSection {
+  readonly type = 'track';
   readonly id: string;
   readonly lineId: string;
   readonly from: string;

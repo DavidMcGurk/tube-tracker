@@ -6,10 +6,7 @@ import {
   DEFAULT_MAP_ZOOM,
   DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
-  getActiveRoute,
   getRouteKey,
-  getRouteStationIds,
-  hasAlternativeRoutes,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
   normalizeStationLabel,
@@ -26,6 +23,20 @@ describe('map interaction helpers', () => {
     expect(stepMapZoom(1, -0.25)).toBe(MIN_MAP_ZOOM);
     expect(stepMapZoom(5.75, 0.25)).toBe(MAX_MAP_ZOOM);
     expect(stepMapZoom(4, 0.25)).toBe(4.25);
+    expect(stepMapZoom(4, -0.25)).toBe(3.75);
+  });
+
+  it('snaps continuous (pinched) zooms onto the step grid in the step direction', () => {
+    expect(stepMapZoom(4.37, 0.25)).toBe(4.5);
+    expect(stepMapZoom(4.37, -0.25)).toBe(4.25);
+    expect(stepMapZoom(1.01, -0.25)).toBe(MIN_MAP_ZOOM);
+    expect(stepMapZoom(5.99, 0.25)).toBe(MAX_MAP_ZOOM);
+    // Values a hair off the grid from floating-point error still step a whole step.
+    expect(stepMapZoom(1.5000000000000002, 0.25)).toBe(1.75);
+    expect(stepMapZoom(1.5000000000000002, -0.25)).toBe(1.25);
+    expect(stepMapZoom(1.4999999999999998, 0.25)).toBe(1.75);
+    expect(stepMapZoom(1.4999999999999998, -0.25)).toBe(1.25);
+    expect(stepMapZoom(3, 0)).toBe(3);
   });
 
   it('toggles selected stations, supports two endpoints, and replaces both when choosing a third', () => {
@@ -35,42 +46,12 @@ describe('map interaction helpers', () => {
     expect(toggleStationSelection(['arsenal', 'holloway_road'], 'finsbury_park')).toEqual(['finsbury_park']);
   });
 
-  it('shows alternatives only when the exact route list contains more than the primary route', () => {
-    const primaryRoute = { path: ['a', 'b'], segments: [], transferStations: [] };
-    const alternateRoute = { path: ['a', 'c'], segments: [], transferStations: [] };
-
-    expect(hasAlternativeRoutes([])).toBe(false);
-    expect(hasAlternativeRoutes([primaryRoute])).toBe(false);
-    expect(hasAlternativeRoutes([primaryRoute, alternateRoute])).toBe(true);
-  });
-
-  it('can identify only the stations and sections belonging to a route preview', () => {
-    const stationId = (name: string) => stations.find((station) => station.name === name)?.id;
-    const cannonStreet = stationId('Cannon Street');
-    const waterloo = stationId('Waterloo');
-    if (!cannonStreet || !waterloo) throw new Error('Expected route-preview stations in the network');
-
-    const options = findRoutes(cannonStreet, waterloo, 2);
-    const first = options[0];
-    const alternative = options[1];
-    expect(first).toBeDefined();
-    expect(alternative).toBeDefined();
+  it('gives distinct route options distinct keys', () => {
+    const options = findRoutes('cannon_street', 'waterloo', 2);
+    const [first, alternative] = options;
     if (!first || !alternative) throw new Error('Expected alternative route options');
-
-    const routeStationIds = getRouteStationIds(first);
-    expect(routeStationIds.has(cannonStreet)).toBe(true);
-    expect(routeStationIds.has(waterloo)).toBe(true);
-    expect(routeStationIds.size).toBe(first.path.length);
+    expect(getRouteKey(first)).toBe(first.links.map((link) => link.id).join('|'));
     expect(getRouteKey(first)).not.toBe(getRouteKey(alternative));
-    expect(getRouteStationIds(alternative)).toEqual(new Set(alternative.path));
-    const recordedSection = first.segments[0];
-    expect(recordedSection).toBeDefined();
-    if (!recordedSection) throw new Error('Expected the route to include a section');
-    expect(getRouteStationIds(first, [recordedSection.id])).toEqual(new Set(
-      first.segments.slice(1).flatMap((section) => [section.from, section.to])
-    ));
-    expect(getActiveRoute(alternative, first)).toBe(alternative);
-    expect(getActiveRoute(null, first)).toBe(first);
   });
 
   it('hides the alternatives control for a direct journey and offers it when options exist', () => {
@@ -87,9 +68,7 @@ describe('map interaction helpers', () => {
     const directJourneyRoutes = findRoutes(arsenal, hollowayRoad, 2);
     const alternateJourneyRoutes = findRoutes(cannonStreet, waterloo, 2);
     expect(directJourneyRoutes).toHaveLength(1);
-    expect(hasAlternativeRoutes(directJourneyRoutes)).toBe(false);
     expect(alternateJourneyRoutes.length).toBeGreaterThan(1);
-    expect(hasAlternativeRoutes(alternateJourneyRoutes)).toBe(true);
   });
 
   it('formats the selected journey endpoints and avoids incomplete labels', () => {

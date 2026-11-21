@@ -1,6 +1,13 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
+/*
+ * Notes on the map rules below: the reference SVG is inlined with its own unlayered <style>, so app overrides of
+ * SVG presentation (fill/stroke of .s*, .f*, .st …) need !important. App-owned state lives in data-app-* attributes.
+ */
+
+/* ---------------------------------------------------------------- Theme tokens */
+
 :root {
   color-scheme: light;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -8,36 +15,88 @@
   font-weight: 400;
   background: #f8fafc;
   color: #0f172a;
+
+  /* Highlight layers drawn beneath the map's lines. */
+  --tt-travelled: #facc15;
+  --tt-travelled-opacity: 0.5;
+  --tt-preview: #f97316;
+  --tt-preview-opacity: 0.7;
+  --tt-highlight-width: 18px;
+  /* A strip between each highlight and its line, so yellow lines (Circle, Lioness) stay distinct from the band. */
+  --tt-highlight-casing: #fff;
+  --tt-highlight-casing-width: 9px;
+
+  /*
+   * Stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you changed.
+   * Stations only passed through stay unmarked: the travelled line already shows them.
+   */
+  --tt-station-entered: #16a34a;
+  --tt-station-changed: #7c3aed;
+  --tt-label-entered: #166534;
+  --tt-label-changed: #6d28d9;
+  /* Line colours that need a lighter stand-in on dark backgrounds (also used by the statistics bars). */
+  --tt-line-northern: #000;
+  --tt-label-hover: #1d4ed8;
+
+  /* Map surfaces. */
+  --tt-map-background: #fff;
+  --tt-fullscreen-background: #f1f5f9;
 }
 
-html, body, #root {
+html[data-theme='dark'] {
+  color-scheme: dark;
+  background: #020617;
+  --tt-travelled: #fbbf24;
+  --tt-travelled-opacity: 0.6;
+  --tt-preview: #fb923c;
+  --tt-preview-opacity: 0.75;
+  --tt-highlight-casing: #0f172a;
+  --tt-station-entered: #4ade80;
+  --tt-station-changed: #a78bfa;
+  --tt-line-northern: #e2e8f0;
+  --tt-label-default: #fff;
+  --tt-label-halo: #0f172a;
+  --tt-label-entered: #4ade80;
+  --tt-label-changed: #c4b5fd;
+  --tt-label-hover: #93c5fd;
+  --tt-map-background: #0f172a;
+}
+
+/* ---------------------------------------------------------------- App shell */
+
+html,
+body,
+#root {
   margin: 0;
-  min-height: 100%;
   min-height: 100vh;
 }
 
-body {
-  min-height: 100vh;
+.app-shell > :is(header, nav, main) {
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-left: calc(1rem + env(safe-area-inset-left));
 }
 
 .app-shell > header {
   padding-top: calc(0.75rem + env(safe-area-inset-top));
-  padding-right: calc(1rem + env(safe-area-inset-right));
-  padding-left: calc(1rem + env(safe-area-inset-left));
-}
-
-.app-shell > nav {
-  padding-right: calc(1rem + env(safe-area-inset-right));
-  padding-left: calc(1rem + env(safe-area-inset-left));
-}
-
-.app-shell > main {
-  padding-right: calc(1rem + env(safe-area-inset-right));
-  padding-left: calc(1rem + env(safe-area-inset-left));
 }
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- Overlays */
+
+.app-alert {
+  position: fixed;
+  z-index: 150;
+  top: calc(0.75rem + env(safe-area-inset-top));
+  left: 50%;
+  width: min(calc(100% - 2rem), 40rem);
+  transform: translateX(-50%);
 }
 
 .reset-confirmation-backdrop {
@@ -54,11 +113,21 @@ button {
   width: min(100%, 28rem);
 }
 
+/* ---------------------------------------------------------------- Map layout */
+
 .tube-map-viewport {
   max-height: min(76vh, 960px);
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y pinch-zoom;
+  /* One-finger panning stays native; pinches are handled in script so they zoom the map rather than the page. */
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  user-select: none;
+
+  &.is-panning {
+    cursor: grabbing;
+  }
 }
 
 .route-action-bar {
@@ -76,7 +145,8 @@ button {
   overscroll-behavior: contain;
 }
 
-@media (min-width: 641px) {
+/* Larger screens: the map tab fills the window and the map viewport takes the remaining height. */
+@media (min-width: 641px) and (min-height: 560px) {
   .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
     display: grid;
     width: 100%;
@@ -84,43 +154,47 @@ button {
     height: 100dvh;
     grid-template-rows: auto auto minmax(0, 1fr);
     overflow: hidden;
-  }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) > main.map-main {
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    padding-bottom: 1rem;
-    overflow: hidden;
-  }
+    & > main.map-main {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      padding-bottom: 1rem;
+      overflow: hidden;
+    }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-card {
-    display: flex;
-    box-sizing: border-box;
-    flex-direction: column;
-    height: 100%;
-  }
+    & .map-card {
+      display: flex;
+      box-sizing: border-box;
+      flex-direction: column;
+      height: 100%;
+    }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .map-card > .mb-3,
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .route-action-bar {
-    flex: none;
-  }
+    & :is(.map-toolbar, .route-action-bar) {
+      flex: none;
+    }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .tube-map-viewport {
-    flex: 1;
-    min-height: 0;
-    max-height: none;
-  }
+    & .tube-map-viewport {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
+    }
 
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) .route-options {
-    max-height: min(28vh, 300px);
+    & .route-options {
+      max-height: min(28vh, 300px);
+    }
   }
 }
 
-@media (max-width: 640px) {
+/* Phones (including phones held sideways): the route actions float above the map as a bottom sheet. */
+@media (max-width: 640px), (max-height: 559px) {
   .tube-map-viewport {
     max-height: min(66svh, 720px);
+
+    &:has(+ .map-inspection-panel) {
+      max-height: calc(min(66svh, 720px) - 68px);
+    }
   }
 
   .route-action-bar {
@@ -137,92 +211,125 @@ button {
     background: rgb(255 255 255 / 94%);
     box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
     backdrop-filter: blur(12px);
-    max-height: 55svh;
+    max-height: 45svh;
     overflow-y: auto;
-  }
 
-  .route-action-bar button {
-    width: 100%;
-  }
+    & button {
+      width: 100%;
+    }
 
-  .route-action-bar.has-options .route-primary-action {
-    align-items: stretch;
-  }
+    /* Stack the route summary above the actions so the summary keeps the full width. */
+    & .route-primary-action {
+      flex-direction: column;
+      align-items: stretch;
+    }
 
-  .route-options {
-    max-height: 36svh;
-  }
-
-  .tube-map-viewport:has(+ .map-inspection-panel) {
-    max-height: calc(min(66svh, 720px) - 68px);
+    & .route-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   html[data-theme='dark'] .route-action-bar {
     border-color: #334155;
     background: rgb(15 23 42 / 94%);
   }
+
+  .route-options {
+    max-height: 28svh;
+  }
+
+  /*
+   * Leave room for the floating route bar (its height is measured into --tt-route-bar-height): the page and the map
+   * can scroll far enough to bring everything above it, and station details float just above it.
+   */
+  .app-shell[data-route-bar='true'] {
+    & > main.map-main {
+      padding-bottom: calc(var(--tt-route-bar-height, 0px) + 1.5rem);
+    }
+
+    & .tube-map-viewport {
+      padding-bottom: var(--tt-route-bar-height, 0px);
+    }
+
+    & .map-inspection-panel {
+      position: fixed;
+      z-index: 111;
+      right: calc(0.75rem + env(safe-area-inset-right));
+      bottom: calc(var(--tt-route-bar-height, 0px) + 1.25rem + env(safe-area-inset-bottom));
+      left: calc(0.75rem + env(safe-area-inset-left));
+      margin: 0;
+      box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
+    }
+  }
 }
 
 @media (max-width: 640px) and (max-height: 700px) {
   .tube-map-viewport {
     max-height: 62svh;
+
+    &:has(+ .map-inspection-panel) {
+      max-height: calc(62svh - 68px);
+    }
   }
-
-  .tube-map-viewport:has(+ .map-inspection-panel) {
-    max-height: calc(62svh - 68px);
-  }
 }
 
-.app-shell[data-map-fullscreen='true'] > header,
-.app-shell[data-map-fullscreen='true'] > nav {
-  display: none;
-}
-
-.app-shell[data-map-fullscreen='true'] > main.map-main {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  width: 100%;
-  max-width: none;
-  height: 100vh;
-  height: 100dvh;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: #f1f5f9;
-}
-
-.app-shell[data-map-fullscreen='true'] .map-card {
-  display: flex;
-  box-sizing: border-box;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left));
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-}
-
-.app-shell[data-map-fullscreen='true'] .map-card > .mb-3 {
-  flex: none;
-}
-
+/* Full-screen map. */
 .fullscreen-theme-control {
   display: none;
 }
 
-.app-shell[data-map-fullscreen='true'] .fullscreen-theme-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+.app-shell[data-map-fullscreen='true'] {
+  & > :is(header, nav) {
+    display: none;
+  }
 
-.app-shell[data-map-fullscreen='true'] .tube-map-viewport {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  max-height: none;
+  & > main.map-main {
+    position: fixed;
+    z-index: 100;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: var(--tt-fullscreen-background);
+  }
+
+  & .map-card {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: calc(0.5rem + env(safe-area-inset-top)) calc(0.5rem + env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left));
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+  }
+
+  & .map-toolbar {
+    flex: none;
+  }
+
+  & .fullscreen-theme-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  & .tube-map-viewport {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  & .route-options {
+    max-height: min(28vh, 300px);
+  }
 }
 
 html:has(.app-shell[data-map-fullscreen='true']),
@@ -230,234 +337,208 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   overflow: hidden;
 }
 
+/* ---------------------------------------------------------------- Map SVG: surfaces and interaction */
+
 .tube-map__svg {
   display: block;
   width: 100%;
   height: auto;
-  background: #fff;
+  background: var(--tt-map-background);
+  /* Pinch previews scale the map from its top-left corner (see useMapZoomGestures). */
+  transform-origin: 0 0;
+
+  & #bg > .progress > rect:first-of-type {
+    transition: fill 150ms ease;
+  }
+
+  & #bg .zone1-label {
+    fill: #475569 !important;
+  }
+
+  & [data-app-station-id] {
+    cursor: pointer !important;
+    pointer-events: all;
+    outline: none !important;
+  }
+
+  & .app-station-hit-area {
+    fill: transparent;
+    pointer-events: all;
+  }
+
+  & [cursor='help'] {
+    cursor: default !important;
+  }
+
+  & #routes :is(.snorthern, .fnorthern) {
+    stroke: #000 !important;
+  }
+
+  & #routes .fnorthern {
+    fill: #000 !important;
+  }
 }
 
-.tube-map-viewport {
-  cursor: grab;
-  user-select: none;
+html[data-theme='dark'] .tube-map__svg {
+  & #bg > .progress > rect:first-of-type {
+    fill: #0f172a !important;
+  }
+
+  & #bg .progress .zone1-background {
+    fill: #1e293b !important;
+    stroke: #334155 !important;
+  }
+
+  & #bg .zone1-label {
+    fill: #cbd5e1 !important;
+  }
+
+  /* Black is invisible on the dark map, so the Northern line is drawn light instead. */
+  & #routes :is(.snorthern, .sedgware) {
+    stroke: #e2e8f0 !important;
+  }
+
+  & #routes .fnorthern {
+    fill: #e2e8f0 !important;
+    stroke: #e2e8f0 !important;
+  }
+
+  & .st {
+    fill: #e2e8f0;
+  }
+
+  /* The river is drawn near-white; on the dark map it becomes a muted blue with light-blue labels. */
+  & #Thames_stripe path[style*='fill:#e9f7ff'] {
+    fill: #1e3a5f !important;
+  }
+
+  & #Thames_stripe path[style*='stroke:#e9f7ff'] {
+    stroke: #1e3a5f !important;
+  }
+
+  & #Thames_stripe :is(.rn, .rn tspan) {
+    fill: #93c5fd !important;
+  }
 }
 
-.tube-map-viewport.is-panning {
-  cursor: grabbing;
-}
+/* ---------------------------------------------------------------- Map SVG: labels */
 
-.tube-map-viewport:has(text[data-app-station-id]:hover) {
-  cursor: pointer;
-}
-
-.tube-map__svg #bg > .progress > rect:first-of-type {
-  transition: fill 150ms ease;
-}
-
-.tube-map__svg [data-app-station-id] {
-  cursor: pointer !important;
-  pointer-events: all;
-  outline: none !important;
-}
-
-.tube-map__svg .app-station-hit-area {
-  fill: transparent;
-  pointer-events: all;
-}
-
-.tube-map__svg [cursor='help'] {
-  cursor: default !important;
-}
-
-.tube-map__svg #text #stname text,
-.tube-map__svg #text #stname tspan,
-.tube-map__svg #text #stname_interchanges text,
-.tube-map__svg #text #stname_interchanges tspan {
-  font-weight: 400 !important;
-  text-decoration: none !important;
-}
-
-.tube-map__svg text[data-app-station-id] {
-  transition: fill 120ms ease, font-weight 120ms ease;
-}
-
-.tube-map__svg text[data-app-state='entered'] {
-  fill: #15803d !important;
-}
-
-.tube-map__svg text[data-app-state='visited'] {
-  fill: #15803d !important;
-}
-
-.tube-map__svg text[data-app-state='changed'] {
-  fill: #b45309 !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='entered'] tspan {
-  fill: #15803d !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='visited'] tspan {
-  fill: #15803d !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-state='changed'] tspan {
-  fill: #b45309 !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true']:not([data-app-selected='true']),
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus:not([data-app-selected='true']) {
-  fill: #b45309 !important;
-  filter: none !important;
-  stroke: none !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] {
-  font-weight: 700 !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-hovered='true']:not([data-app-selected='true']) tspan,
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-station-id]:focus:not([data-app-selected='true']) tspan {
-  fill: #b45309 !important;
-  filter: none !important;
-  stroke: none !important;
-}
-
-.tube-map__svg #text :is(#stname, [id^='stname_']) text[data-app-selected='true'] tspan {
-  font-weight: 700 !important;
-}
-
-.tube-map__svg #station_nodes [data-app-state='visited'] {
-  filter: drop-shadow(0 0 3px #facc15) drop-shadow(0 0 2px #facc15);
-}
-
-.tube-map__svg #bg .zone1-label {
-  fill: #475569 !important;
-}
-
-.tube-map__svg #text .fcircle,
-.tube-map__svg #text .fcircle text,
-.tube-map__svg #text .fcircle tspan,
-.tube-map__svg #text .flioness,
-.tube-map__svg #text .flioness text,
-.tube-map__svg #text .flioness tspan {
-  fill: #111 !important;
-}
-
-.tube-map__svg #text .fcircle text[data-app-station-id],
-.tube-map__svg #text .fcircle text[data-app-station-id] tspan,
-.tube-map__svg #text .flioness text[data-app-station-id],
-.tube-map__svg #text .flioness text[data-app-station-id] tspan {
-  fill: #111 !important;
-}
-
-#app-travelled-sections {
-  opacity: 0.95;
-}
-
-#app-route-preview-sections {
-  opacity: 0.88;
-}
-
-.tube-map__svg .app-travelled-section {
-  fill: none;
-  stroke: #facc15;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 16px;
-  pointer-events: none;
-}
-
-.tube-map__svg .app-route-preview-section {
-  fill: none;
-  stroke: #f97316;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 16px;
-  pointer-events: none;
-}
-
-.tube-map__svg #routes .snorthern,
-.tube-map__svg #routes .fnorthern {
-  stroke: #000 !important;
-}
-
-.tube-map__svg #routes .fnorthern {
-  fill: #000 !important;
-}
-
-html[data-theme='dark'] .tube-map__svg #bg > .progress > rect:first-of-type {
-  fill: #0f172a !important;
-}
-
-html[data-theme='dark'] .tube-map__svg #bg .progress .zone1-background {
-  fill: #1e293b !important;
-  stroke: #334155 !important;
-}
-
-html[data-theme='dark'] .tube-map__svg #bg .zone1-label {
-  fill: #cbd5e1 !important;
-}
-
-html[data-theme='dark'] .tube-map__svg .app-travelled-section {
-  stroke: #fbbf24;
-}
-
-html[data-theme='dark'] .tube-map__svg #text .fcircle,
-html[data-theme='dark'] .tube-map__svg #text .fcircle text,
-html[data-theme='dark'] .tube-map__svg #text .fcircle tspan,
-html[data-theme='dark'] .tube-map__svg #text .flioness,
-html[data-theme='dark'] .tube-map__svg #text .flioness text,
-html[data-theme='dark'] .tube-map__svg #text .flioness tspan {
-  fill: #111 !important;
+/* Dark mode: map text is light with a dark halo (line-name labels keep their colours on their white backgrounds). */
+html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .small *)) {
+  fill: var(--tt-label-default) !important;
   paint-order: stroke;
-  stroke: #fff;
-  stroke-linejoin: round;
-  stroke-width: 2.5px;
-}
-
-html[data-theme='dark'] .tube-map__svg .app-route-preview-section {
-  stroke: #fb923c;
-}
-
-html[data-theme='dark'] .tube-map__svg #station_nodes [data-app-state='visited'] {
-  filter: drop-shadow(0 0 3px #fde047) drop-shadow(0 0 2px #fde047);
-}
-
-html[data-theme='dark'] .tube-map__svg .st {
-  fill: #e2e8f0;
-}
-
-.tube-map__svg text[data-app-hovered='true'],
-.tube-map__svg text[data-app-station-id]:focus {
-  font-weight: 400;
-}
-
-.tube-map__svg text[data-app-selected='true'] {
-  font-weight: 700 !important;
-}
-
-html[data-theme='dark'] .app-shell {
-  color: #fff !important;
-}
-
-html[data-theme='dark'] .app-shell * {
-  color: #fff !important;
-}
-
-html[data-theme='dark'] .app-shell nav button[class*='dark:bg-slate-100'] {
-  background-color: #334155;
-}
-
-html[data-theme='dark'] .tube-map__svg text,
-html[data-theme='dark'] .tube-map__svg tspan {
-  fill: #fff !important;
-  paint-order: stroke;
-  stroke: #0f172a;
+  stroke: var(--tt-label-halo);
   stroke-linejoin: round;
   stroke-width: 2px;
 }
 
-html[data-theme='dark'] {
-  color-scheme: dark;
+/* Station names are drawn at a regular weight; selection makes them bold. Line-name labels stay bold. */
+.tube-map__svg #stname :is(text, tspan):where(:not(.small *)) {
+  font-weight: 400 !important;
+  text-decoration: none !important;
+}
+
+/*
+ * Station-name state colours. Each rule targets the label and its tspans with an id in the selector, so it outranks
+ * the dark-mode default above and the SVG's own label fills.
+ */
+.tube-map__svg #stname text[data-app-station-id] {
+  transition: fill 120ms ease, font-weight 120ms ease;
+}
+
+.tube-map__svg #stname text[data-app-state='entered'],
+.tube-map__svg #stname text[data-app-state='entered'] tspan {
+  fill: var(--tt-label-entered) !important;
+}
+
+.tube-map__svg #stname text[data-app-state='changed'],
+.tube-map__svg #stname text[data-app-state='changed'] tspan {
+  fill: var(--tt-label-changed) !important;
+}
+
+.tube-map__svg #stname text:is([data-app-hovered='true'], [data-app-station-id]:focus):not([data-app-selected='true']),
+.tube-map__svg #stname text:is([data-app-hovered='true'], [data-app-station-id]:focus):not([data-app-selected='true']) tspan {
+  fill: var(--tt-label-hover) !important;
+  filter: none !important;
+  stroke: none !important;
+}
+
+.tube-map__svg #stname text[data-app-selected='true'],
+.tube-map__svg #stname text[data-app-selected='true'] tspan {
+  font-weight: 700 !important;
+}
+
+/*
+ * Line-name labels sit on white backgrounds and use their line's colour; the four lightest colours are darkened
+ * just enough to reach 3:1 contrast on white while keeping their hue.
+ */
+.tube-map__svg .app-line-label-background {
+  fill: #fff;
+  stroke: none;
+  pointer-events: none;
+}
+
+.tube-map__svg #stname > .small :is(.flioness, .flioness text, .flioness tspan) {
+  fill: #c48926 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fcircle, .fcircle text, .fcircle tspan) {
+  fill: #c58800 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fwnc, .fwnc text, .fwnc tspan) {
+  fill: #4aa385 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fsuffragette, .fsuffragette text, .fsuffragette tspan) {
+  fill: #40a76d !important;
+}
+
+/* ---------------------------------------------------------------- Map SVG: station markers and highlights */
+
+.tube-map__svg #station_nodes [data-app-state='entered'] {
+  filter: drop-shadow(0 0 3px var(--tt-station-entered)) drop-shadow(0 0 2px var(--tt-station-entered));
+}
+
+.tube-map__svg #station_nodes [data-app-state='changed'] {
+  filter: drop-shadow(0 0 3px var(--tt-station-changed)) drop-shadow(0 0 2px var(--tt-station-changed));
+}
+
+#app-travelled-sections {
+  opacity: var(--tt-travelled-opacity);
+}
+
+#app-route-preview-sections {
+  opacity: var(--tt-preview-opacity);
+}
+
+.tube-map__svg :is(.app-travelled-section, .app-route-preview-section) {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--tt-highlight-width);
+  pointer-events: none;
+}
+
+.tube-map__svg .app-travelled-section {
+  stroke: var(--tt-travelled);
+}
+
+.tube-map__svg .app-highlight-casing {
+  fill: none;
+  stroke: var(--tt-highlight-casing);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--tt-highlight-casing-width);
+  pointer-events: none;
+}
+
+.tube-map__svg .app-route-preview-section {
+  stroke: var(--tt-preview);
+}
+
+/* Walking interchanges are highlighted as a dashed band so they read as walks, not track. */
+.tube-map__svg .app-walk-link {
+  stroke-dasharray: 0 20;
+  stroke-width: calc(var(--tt-highlight-width) * 0.75);
 }

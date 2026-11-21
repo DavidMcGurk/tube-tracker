@@ -619,7 +619,11 @@ text {font-family:Arimo,Liberation Sans,Helvetica,Arial,sans-serif}
 			<g cursor="help">
 				
 				
-				<use xlink:href="#stbakerloo" transform="translate(970,545.25)rotate(-126.67)" id="Edgware_Road_bakerloo" />
+				<g class="osib">
+					<path id="Edgware_Road_osi" d="M 970,545.25 L 981,559" />
+				</g>
+				<use xlink:href="#Edgware_Road_osi" class="osi" />
+				<use xlink:href="#int" x="970" y="545.25" id="Edgware_Road_bakerloo" />
 				<use xlink:href="#cap2" transform="translate(981,559)rotate(53.13)" id="Edgware_Road_circle" />
 			</g>
 			<g>
@@ -1810,6 +1814,7 @@ text {font-family:Arimo,Liberation Sans,Helvetica,Arial,sans-serif}
 					
 				</g>
 				<text x="1302" y="445">Russell <tspan x="1302" dy="13">Square</tspan></text>
+				<text x="1293" y="569">Covent <tspan x="1293" dy="13">Garden</tspan></text>
 				<text x="1302" y="278">Caledonian Road</text>
 				<g class="end">
 					<text x="1326" y="229">Holloway Road</text>
@@ -2080,7 +2085,7 @@ text {font-family:Arimo,Liberation Sans,Helvetica,Arial,sans-serif}
 					</g>
 					<text transform="translate(1483,145)rotate(36.87)" class="fweaver">Weaver line</text>
 					<text transform="translate(1671,25)rotate(90)" class="fweaver">Weaver line</text>
-					<text transform="translate(2311.5,110)rotate(53.13)" class="fogromford">Liberty line</text>
+					<text transform="translate(2311.5,110)rotate(53.13)" class="fliberty">Liberty line</text>
 					<g class="felizabeth">
 						<text x="113" y="733" class="end">Elizabeth line</text>
 						<text x="1035" y="588" class="mid">Elizabeth line</text>

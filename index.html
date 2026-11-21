@@ -3,10 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f172a" />
+    <!-- Updated at runtime to match the header in the active theme (see useTheme). -->
+    <meta name="theme-color" content="#fcfdfe" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c1327" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Tube Tracker is a personal London network completion tracker." />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="pwa-64x64.png" sizes="64x64" type="image/png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon-180x180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tube Tracker" />
+    <!-- "default" keeps the home-screen app below an opaque status bar tinted by theme-color, so it stays legible in both themes. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Tube Tracker</title>
+    <script>
+      // Apply the saved theme before anything paints (mirrors useTheme and storage.ts THEME_STORAGE_KEY).
+      (function () {
+        try {
+          var stored = localStorage.getItem('tube-tracker-theme');
+          var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+            meta.setAttribute('content', dark ? '#0c1327' : '#fcfdfe');
+          });
+        } catch (error) {
+          // Storage can be unavailable (e.g. private browsing); the app applies the theme once it loads.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
