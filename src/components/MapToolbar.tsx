@@ -54,16 +54,26 @@ export function MapToolbar(props: MapToolbarProps) {
           {fullscreen ? <ExitFullscreenIcon /> : <EnterFullscreenIcon />}
         </button>
         <ThemeToggleButton className="fullscreen-theme-control" resolvedTheme={props.resolvedTheme} onToggle={props.onToggleTheme} />
-        <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Yellow highlights show travelled sections and stations">
-          <LegendSwatch bar="bg-yellow-400 dark:bg-yellow-300" dot="border-yellow-500 dark:border-yellow-300" />
-          Travelled
-        </span>
-        {props.showNewRouteLegend && (
-          <span className="inline-flex items-center gap-2 px-2 text-xs text-slate-600 dark:text-slate-300" aria-label="Orange highlights show new sections in the selected route">
-            <LegendSwatch bar="bg-orange-500 dark:bg-orange-400" dot="border-orange-600 dark:border-orange-400" />
-            New route
+        <div className="map-legend flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-600 dark:text-slate-300">
+          <span className="inline-flex items-center gap-2" aria-label="Yellow highlights show travelled track">
+            <LegendSwatch bar="bg-yellow-400 dark:bg-yellow-300" dot="border-yellow-500 dark:border-yellow-300" />
+            Travelled
           </span>
-        )}
+          {props.showNewRouteLegend && (
+            <span className="inline-flex items-center gap-2" aria-label="Orange highlights show new track in the selected route">
+              <LegendSwatch bar="bg-orange-500 dark:bg-orange-400" dot="border-orange-600 dark:border-orange-400" />
+              New route
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5" aria-label="Green stations are ones you have entered or exited">
+            <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-entered)" aria-hidden="true" />
+            Visited
+          </span>
+          <span className="inline-flex items-center gap-1.5" aria-label="Amber stations are ones where you changed lines">
+            <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-changed)" aria-hidden="true" />
+            Changed
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -104,16 +104,26 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const fillOf = (element: Element | null) => (element ? getComputedStyle(element).fill : null);
       const label = (stationId: string) => document.querySelector(`#text text[data-app-station-id="${stationId}"]`);
       const changed = [...document.querySelectorAll('#text text[data-app-state="changed"]')];
+      const glowOf = (stationId: string) => getComputedStyle(document.querySelector(`#station_nodes use[data-app-station-id="${stationId}"]`)!).filter;
       return {
         entered: fillOf(label('paddington')),
         neutral: fillOf(label('upminster')),
-        changed: changed.map((text) => [fillOf(text), ...[...text.querySelectorAll('tspan')].map(fillOf)])
+        passedThrough: fillOf(label('westminster')),
+        changed: changed.map((text) => [fillOf(text), ...[...text.querySelectorAll('tspan')].map(fillOf)]),
+        glows: { entered: glowOf('paddington'), changed: glowOf('bond_street'), passedThrough: glowOf('westminster'), neutral: glowOf('upminster') }
       };
     });
     // Label fills animate briefly, so wait for them to settle.
     await expect.poll(async () => (await readFills()).entered).toBe(expected.entered);
     const fills = await readFills();
     expect(fills.neutral).not.toBe(expected.entered);
+    // Stations only passed through are not marked: same colour and no glow, like stations never visited.
+    expect(fills.passedThrough).toBe(fills.neutral);
+    expect(fills.glows.passedThrough).toBe('none');
+    expect(fills.glows.neutral).toBe('none');
+    expect(fills.glows.entered).toContain('drop-shadow');
+    expect(fills.glows.changed).toContain('drop-shadow');
+    expect(fills.glows.changed).not.toBe(fills.glows.entered);
     expect(fills.changed.length).toBeGreaterThan(0);
     for (const labelFills of fills.changed) expect(new Set(labelFills)).toEqual(new Set([expected.changed]));
   });

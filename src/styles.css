@@ -22,13 +22,16 @@
   --tt-preview: #f97316;
   --tt-preview-opacity: 0.88;
   --tt-highlight-width: 16px;
-  --tt-visited-glow: #facc15;
 
-  /* Station-name label colours by journey state. */
+  /*
+   * Stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you changed.
+   * Stations only passed through stay unmarked: the travelled line already shows them.
+   */
+  --tt-station-entered: #16a34a;
+  --tt-station-changed: #d97706;
   --tt-label-entered: #15803d;
-  --tt-label-visited: #15803d;
   --tt-label-changed: #b45309;
-  --tt-label-hover: #b45309;
+  --tt-label-hover: #1d4ed8;
 
   /* Map surfaces. */
   --tt-map-background: #fff;
@@ -39,13 +42,13 @@ html[data-theme='dark'] {
   color-scheme: dark;
   --tt-travelled: #fbbf24;
   --tt-preview: #fb923c;
-  --tt-visited-glow: #fde047;
+  --tt-station-entered: #4ade80;
+  --tt-station-changed: #fbbf24;
   --tt-label-default: #fff;
   --tt-label-halo: #0f172a;
   --tt-label-entered: #4ade80;
-  --tt-label-visited: #4ade80;
   --tt-label-changed: #fbbf24;
-  --tt-label-hover: #fbbf24;
+  --tt-label-hover: #93c5fd;
 }
 
 /* ---------------------------------------------------------------- App shell */
@@ -392,11 +395,6 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan) {
   fill: var(--tt-label-entered) !important;
 }
 
-.tube-map__svg #stname text[data-app-state='visited'],
-.tube-map__svg #stname text[data-app-state='visited'] tspan {
-  fill: var(--tt-label-visited) !important;
-}
-
 .tube-map__svg #stname text[data-app-state='changed'],
 .tube-map__svg #stname text[data-app-state='changed'] tspan {
   fill: var(--tt-label-changed) !important;
@@ -428,8 +426,12 @@ html[data-theme='dark'] .tube-map__svg #text :is(.fcircle, .flioness) :is(text, 
 
 /* ---------------------------------------------------------------- Map SVG: station markers and highlights */
 
-.tube-map__svg #station_nodes [data-app-state='visited'] {
-  filter: drop-shadow(0 0 3px var(--tt-visited-glow)) drop-shadow(0 0 2px var(--tt-visited-glow));
+.tube-map__svg #station_nodes [data-app-state='entered'] {
+  filter: drop-shadow(0 0 3px var(--tt-station-entered)) drop-shadow(0 0 2px var(--tt-station-entered));
+}
+
+.tube-map__svg #station_nodes [data-app-state='changed'] {
+  filter: drop-shadow(0 0 3px var(--tt-station-changed)) drop-shadow(0 0 2px var(--tt-station-changed));
 }
 
 #app-travelled-sections {

@@ -109,13 +109,18 @@ const sectionsByLine = new Map(lines.map((line) => [line.id, sections.filter((se
 const stationsByLine = new Map(lines.map((line) => [line.id, stations.filter((station) => station.lines.includes(line.id))]));
 const totalNetworkDistance = sections.reduce((sum, section) => sum + section.distance, 0);
 
+/** Stations you have been to: entered, exited or changed at. Stations only passed through are not counted. */
+function getVisitedStationIds(index: ProgressIndex) {
+  return new Set([...index.enteredOrExitedStationIds, ...index.changedAtStationIds]);
+}
+
 export function summariseProgress(progress: Progress): NetworkSummary {
   const index = getProgressIndex(progress);
+  const visitedStationIds = getVisitedStationIds(index);
   const travelledDistance = sections.reduce(
     (sum, section) => (index.travelledSectionIds.has(section.id) ? sum + section.distance : sum),
     0
   );
-  const stationsInProgress = new Set([...index.enteredOrExitedStationIds, ...index.passedStationIds]);
 
   const lineProgress = lines.map((line): LineProgress => {
     const lineSections = sectionsByLine.get(line.id) ?? [];
@@ -123,7 +128,6 @@ export function summariseProgress(progress: Progress): NetworkSummary {
     const travelledLineDistance = completedSections.reduce((sum, section) => sum + section.distance, 0);
     const totalLineDistance = lineSections.reduce((sum, section) => sum + section.distance, 0);
     const lineStations = stationsByLine.get(line.id) ?? [];
-    const visitedStationIds = new Set(completedSections.flatMap((section) => [section.from, section.to]));
     const visitedStations = lineStations.filter((station) => visitedStationIds.has(station.id)).length;
     return {
       id: line.id,
@@ -142,7 +146,7 @@ export function summariseProgress(progress: Progress): NetworkSummary {
     totalDistance: totalNetworkDistance,
     travelledDistance,
     coverage: totalNetworkDistance > 0 ? (travelledDistance / totalNetworkDistance) * 100 : 0,
-    uniqueStations: stationsInProgress.size,
+    uniqueStations: visitedStationIds.size,
     completedLines: lineProgress.filter((entry) => entry.complete).length,
     lineProgress
   };

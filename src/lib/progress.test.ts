@@ -94,9 +94,31 @@ describe('summariseProgress', () => {
     expect(walked.travelledDistance).toBe(0);
   });
 
+  it('counts stations entered, exited or changed at as visited, but not stations only passed through', () => {
+    const journey = route('paddington', 'london_bridge');
+    const summary = summariseProgress(addRouteToProgress(EMPTY_PROGRESS, journey));
+    const visited = new Set([journey.path[0], journey.path.at(-1), ...journey.changes.flatMap((change) => (change.type === 'line' ? [change.at] : []))]);
+    expect(journey.path.length).toBeGreaterThan(visited.size);
+    expect(summary.uniqueStations).toBe(visited.size);
+
+    const passedOnly = summariseProgress({ ...EMPTY_PROGRESS, travelledSegmentIDs: journey.sections.map((section) => section.id) });
+    expect(passedOnly.uniqueStations).toBe(0);
+    expect(passedOnly.lineProgress.every((line) => line.visitedStations === 0)).toBe(true);
+  });
+
+  it('counts a visited station towards every line that serves it', () => {
+    const summary = summariseProgress({ ...EMPTY_PROGRESS, stationsEnteredOrExitedIDs: ['kings_cross'] });
+    const linesWithVisit = summary.lineProgress.filter((line) => line.visitedStations === 1).map((line) => line.id).sort();
+    expect(linesWithVisit).toEqual(['circle', 'hammersmith_city', 'metropolitan', 'northern', 'piccadilly', 'victoria']);
+  });
+
   it('keeps distance and station coverage independent when either is higher', () => {
     const comparisons = sections.map((section) => {
-      const summary = summariseProgress({ ...EMPTY_PROGRESS, travelledSegmentIDs: [section.id] });
+      const summary = summariseProgress({
+        ...EMPTY_PROGRESS,
+        travelledSegmentIDs: [section.id],
+        stationsEnteredOrExitedIDs: [section.from, section.to]
+      });
       return summary.lineProgress.find((line) => line.id === section.lineId)!;
     });
     expect(comparisons.some((line) => line.completion > line.stationCompletion)).toBe(true);
