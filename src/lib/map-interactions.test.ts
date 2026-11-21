@@ -36,7 +36,7 @@ describe('map interaction helpers', () => {
     const options = findRoutes('cannon_street', 'waterloo', 2);
     const [first, alternative] = options;
     if (!first || !alternative) throw new Error('Expected alternative route options');
-    expect(getRouteKey(first)).toBe(first.sections.map((section) => section.id).join('|'));
+    expect(getRouteKey(first)).toBe(first.links.map((link) => link.id).join('|'));
     expect(getRouteKey(first)).not.toBe(getRouteKey(alternative));
   });
 

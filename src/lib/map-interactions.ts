@@ -25,7 +25,7 @@ export function toggleStationSelection(selectedStationIds: string[], stationId: 
 }
 
 export function getRouteKey(route: RouteResult) {
-  return route.sections.map((section) => section.id).join('|');
+  return route.key;
 }
 
 export function formatRouteEndpoints(startStationName?: string, endStationName?: string) {

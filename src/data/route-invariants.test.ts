@@ -25,15 +25,19 @@ const sectionIds = new Set(sections.map((section) => section.id));
 function expectWellFormed(route: RouteResult, start: string, end: string) {
   expect(route.path[0]).toBe(start);
   expect(route.path.at(-1)).toBe(end);
-  expect(route.path).toHaveLength(route.sections.length + 1);
-  route.sections.forEach((section, index) => {
+  expect(route.path).toHaveLength(route.links.length + 1);
+  route.links.forEach((link, index) => {
     const a = route.path[index];
     const b = route.path[index + 1];
-    expect(sectionIds.has(section.id)).toBe(true);
-    expect((section.from === a && section.to === b) || (section.from === b && section.to === a)).toBe(true);
+    expect(link.type === 'walk' || sectionIds.has(link.id)).toBe(true);
+    expect((link.from === a && link.to === b) || (link.from === b && link.to === a)).toBe(true);
   });
   expect(route.path.every((stationId) => stationIds.has(stationId))).toBe(true);
-  expect(route.transferStations.every((stationId) => route.path.includes(stationId))).toBe(true);
+  expect(new Set(route.path).size).toBe(route.path.length);
+  for (const change of route.changes) {
+    if (change.type === 'line') expect(route.path).toContain(change.at);
+    else expect(route.path).toEqual(expect.arrayContaining([change.from, change.to]));
+  }
 }
 
 describe('route invariants', () => {
@@ -49,7 +53,7 @@ describe('route invariants', () => {
     expect(routes.length).toBeGreaterThan(0);
     for (const route of routes) expectWellFormed(route, start, end);
 
-    const keys = routes.map((route) => route.sections.map((section) => section.id).join('|'));
+    const keys = routes.map((route) => route.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 

@@ -55,8 +55,8 @@ export function useProgress() {
     }
   }, []);
 
-  const recordRoute = useCallback(async (route: RouteResult, startStationId: string, endStationId: string): Promise<RecordOutcome> => {
-    const next = addRouteToProgress(progressRef.current, route, startStationId, endStationId);
+  const recordRoute = useCallback(async (route: RouteResult): Promise<RecordOutcome> => {
+    const next = addRouteToProgress(progressRef.current, route);
     if (next === progressRef.current) return 'unchanged';
     return (await commit(next)) ? 'recorded' : 'failed';
   }, [commit]);

@@ -1,5 +1,4 @@
-import type { TransportSystem } from '../lib/types';
-import type { TrackSection } from './track-section';
+import type { NetworkLink, TransportSystem } from '../lib/types';
 
 export interface StationRecord {
   id: string;
@@ -13,7 +12,7 @@ export class Station {
   readonly name: string;
   readonly lines: readonly string[];
   readonly system: TransportSystem;
-  private readonly connections = new Map<string, TrackSection>();
+  private readonly connections = new Map<string, NetworkLink>();
 
   constructor(record: StationRecord) {
     this.id = record.id;
@@ -22,21 +21,21 @@ export class Station {
     this.system = record.system;
   }
 
-  connect(section: TrackSection) {
-    if (section.from !== this.id && section.to !== this.id) {
-      throw new Error(`Section "${section.id}" does not connect to station "${this.id}"`);
+  connect(link: NetworkLink) {
+    if (link.from !== this.id && link.to !== this.id) {
+      throw new Error(`Link "${link.id}" does not connect to station "${this.id}"`);
     }
-    if (this.connections.has(section.id)) {
-      throw new Error(`Section "${section.id}" is already connected to station "${this.id}"`);
+    if (this.connections.has(link.id)) {
+      throw new Error(`Link "${link.id}" is already connected to station "${this.id}"`);
     }
-    this.connections.set(section.id, section);
+    this.connections.set(link.id, link);
   }
 
-  getConnections(): readonly TrackSection[] {
+  getConnections(): readonly NetworkLink[] {
     return [...this.connections.values()];
   }
 
   getNeighborIds(): string[] {
-    return [...this.connections.values()].map((section) => section.getOtherStationId(this.id));
+    return [...this.connections.values()].map((link) => link.getOtherStationId(this.id));
   }
 }

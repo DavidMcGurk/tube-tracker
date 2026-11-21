@@ -23,15 +23,13 @@ function App() {
   const { resolvedTheme, toggleTheme } = useTheme();
   const { progress, error: progressError, dismissError, recordRoute, resetProgress } = useProgress();
   const selection = useRouteSelection();
-  const { selectedStationIds, clearSelection, closeChooser } = selection;
+  const { clearSelection, closeChooser } = selection;
 
   const handleRecordRoute = useCallback(async (route: RouteResult) => {
-    const [startId, endId] = selectedStationIds;
-    if (!startId || !endId) return;
-    const outcome = await recordRoute(route, startId, endId);
+    const outcome = await recordRoute(route);
     if (outcome === 'recorded') clearSelection();
     else if (outcome === 'unchanged') closeChooser();
-  }, [selectedStationIds, recordRoute, clearSelection, closeChooser]);
+  }, [recordRoute, clearSelection, closeChooser]);
 
   const handleConfirmReset = useCallback(async () => {
     if (await resetProgress()) clearSelection();

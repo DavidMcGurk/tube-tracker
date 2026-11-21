@@ -118,14 +118,6 @@ export function polylineLength(points: readonly Point[]) {
   return length;
 }
 
-/** Samples the Bank–Monument interchange connector drawn inside the station hub. */
-export function sampleInterchangePath(svg: SVGSVGElement): Point[] | null {
-  const svgMatrix = svg.getScreenCTM();
-  const path = svg.querySelector<SVGPathElement>('#station_nodes #Bank_Monument_hub path');
-  if (!svgMatrix || !path) return null;
-  return samplePath(path, svgMatrix.inverse());
-}
-
 export function closestPointOnComponent(component: PathComponent, positions: readonly Point[]): ClosestPoint | null {
   let closest: ClosestPoint | null = null;
   component.forEach((sample, index) => {

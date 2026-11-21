@@ -94,7 +94,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test.skip(testInfo.project.name !== 'laptop-1280', 'computed style check runs on one project');
     await page.emulateMedia({ colorScheme });
     await openMap(page);
-    await recordJourney(page, testInfo, 'paddington', 'waterloo');
+    // Elizabeth line then Jubilee, changing at Bond Street.
+    await recordJourney(page, testInfo, 'paddington', 'london_bridge');
 
     const expected = colorScheme === 'light'
       ? { entered: 'rgb(21, 128, 61)', changed: 'rgb(180, 83, 9)' }
@@ -117,3 +118,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
     for (const labelFills of fills.changed) expect(new Set(labelFills)).toEqual(new Set([expected.changed]));
   });
 }
+
+test('quickly tapping two stations selects both instead of opening station details', async ({ page }, testInfo) => {
+  await openMap(page);
+  await selectStation(page, testInfo, 'golders_green');
+  await selectStation(page, testInfo, 'camden_road');
+  await expect(page.locator('.route-action-bar')).toContainText('Golders Green → Camden Road');
+  await expect(page.locator('.map-inspection-panel')).toBeHidden();
+});
+
+test('double-clicking a station shows its details and keeps the current selection', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'laptop-1280', 'mouse double click');
+  await openMap(page);
+  await stationLabel(page, 'bank').click();
+  // The two clicks toggle Bank off and on again, so the selection is unchanged and its details open.
+  await stationLabel(page, 'bank').dblclick();
+  await expect(page.locator('.map-inspection-panel')).toContainText('Bank');
+  await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'true');
+});

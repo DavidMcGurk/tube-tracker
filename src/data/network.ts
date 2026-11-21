@@ -1,7 +1,9 @@
 import type { LineDefinition } from '../lib/types';
 import type { TrackSectionRecord } from './track-section';
+import { lineServices } from './line-services';
 import { TransitNetwork } from './transit-network';
 import { tflSectionRows, tflStationRows } from './tfl-network-data';
+import { walkLinkRecords } from './walk-links';
 
 export const lines: LineDefinition[] = [
   { id: 'bakerloo', name: 'Bakerloo', color: '#b36305', system: 'Underground' },
@@ -25,18 +27,18 @@ export const lines: LineDefinition[] = [
   { id: 'elizabeth', name: 'Elizabeth line', color: '#6950a1', system: 'Elizabeth line' }
 ];
 
-const sectionRecords: TrackSectionRecord[] = [
-  ...tflSectionRows.map(([id, lineId, from, to, distance]) => ({ id, lineId, from, to, distance })),
-  { id: 'bank_monument_interchange', lineId: 'interchange', from: 'bank', to: 'monument', distance: 332 }
-];
+const sectionRecords: TrackSectionRecord[] = tflSectionRows.map(([id, lineId, from, to, distance]) => ({ id, lineId, from, to, distance }));
 
 export const network = new TransitNetwork(
   tflStationRows.map(([id, name, system, lineIds]) => ({ id, name, system, lines: lineIds })),
-  sectionRecords
+  sectionRecords,
+  walkLinkRecords,
+  { lineServices }
 );
 
 export const stations = network.stations;
 export const sections = network.sections;
+export const walkLinks = network.walkLinks;
 
 export function findRoute(startStationId: string, endStationId: string) {
   return network.findRoute(startStationId, endStationId);
@@ -52,4 +54,8 @@ export function getStationById(stationId: string) {
 
 export function getSectionById(sectionId: string) {
   return network.getSection(sectionId);
+}
+
+export function getWalkLinkById(linkId: string) {
+  return network.getWalkLink(linkId);
 }

@@ -619,7 +619,11 @@ text {font-family:Arimo,Liberation Sans,Helvetica,Arial,sans-serif}
 			<g cursor="help">
 				
 				
-				<use xlink:href="#stbakerloo" transform="translate(970,545.25)rotate(-126.67)" id="Edgware_Road_bakerloo" />
+				<g class="osib">
+					<path id="Edgware_Road_osi" d="M 970,545.25 L 981,559" />
+				</g>
+				<use xlink:href="#Edgware_Road_osi" class="osi" />
+				<use xlink:href="#int" x="970" y="545.25" id="Edgware_Road_bakerloo" />
 				<use xlink:href="#cap2" transform="translate(981,559)rotate(53.13)" id="Edgware_Road_circle" />
 			</g>
 			<g>

@@ -54,7 +54,7 @@ export async function seedTravelledSections(page: Page, sectionFilter = 'true') 
   await page.evaluate(`(async () => {
     const network = await import('/src/data/network.ts');
     const storage = await import('/src/lib/storage.ts');
-    const ids = network.sections.filter((section) => section.lineId !== 'interchange' && (${sectionFilter})).map((section) => section.id);
-    await storage.saveProgress({ travelledSegmentIDs: ids, stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] });
+    const ids = network.sections.filter((section) => ${sectionFilter}).map((section) => section.id);
+    await storage.saveProgress({ travelledSegmentIDs: ids, walkedLinkIDs: [], stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] });
   })()`);
 }

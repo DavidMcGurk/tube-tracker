@@ -1,8 +1,9 @@
-import { getSectionById, getStationById, lines, sections, stations } from '../data/network';
+import { getSectionById, getStationById, getWalkLinkById, lines, sections, stations } from '../data/network';
 import type { LineProgress, NetworkSummary, Progress, RouteResult, StationState } from './types';
 
 export const EMPTY_PROGRESS: Progress = {
   travelledSegmentIDs: [],
+  walkedLinkIDs: [],
   stationsEnteredOrExitedIDs: [],
   stationsChangedAtIDs: []
 };
@@ -22,6 +23,7 @@ export function sanitizeProgress(value: unknown): Progress {
   const isStation = (id: string) => getStationById(id) !== undefined;
   return {
     travelledSegmentIDs: knownIds(record.travelledSegmentIDs, (id) => getSectionById(id) !== undefined),
+    walkedLinkIDs: knownIds(record.walkedLinkIDs, (id) => getWalkLinkById(id) !== undefined),
     stationsEnteredOrExitedIDs: knownIds(record.stationsEnteredOrExitedIDs, isStation),
     stationsChangedAtIDs: knownIds(record.stationsChangedAtIDs, isStation)
   };
@@ -30,6 +32,7 @@ export function sanitizeProgress(value: unknown): Progress {
 /** Set-based view of a progress record so per-station lookups are O(1). */
 export interface ProgressIndex {
   travelledSectionIds: ReadonlySet<string>;
+  walkedLinkIds: ReadonlySet<string>;
   enteredOrExitedStationIds: ReadonlySet<string>;
   changedAtStationIds: ReadonlySet<string>;
   /** Every station at either end of a travelled section, including stations only passed through. */
@@ -51,6 +54,7 @@ export function getProgressIndex(progress: Progress): ProgressIndex {
   }
   const index: ProgressIndex = {
     travelledSectionIds: new Set(progress.travelledSegmentIDs),
+    walkedLinkIds: new Set(progress.walkedLinkIDs),
     enteredOrExitedStationIds: new Set(progress.stationsEnteredOrExitedIDs),
     changedAtStationIds: new Set(progress.stationsChangedAtIDs),
     passedStationIds
@@ -66,28 +70,39 @@ function appendUnique(existing: string[], additions: readonly string[]): string[
 }
 
 export function routeIsAlreadyComplete(progress: Progress, route: RouteResult) {
-  const { travelledSectionIds } = getProgressIndex(progress);
-  return route.sections.every((section) => travelledSectionIds.has(section.id));
+  const { travelledSectionIds, walkedLinkIds } = getProgressIndex(progress);
+  return route.sections.every((section) => travelledSectionIds.has(section.id))
+    && route.walks.every((walk) => walkedLinkIds.has(walk.id));
+}
+
+/**
+ * Stations a journey went through the gates of (its ends, and both ends of out-of-station walks) and stations where
+ * it changed without leaving (line changes, and both ends of in-station walks).
+ */
+export function getJourneyStations(route: RouteResult) {
+  const enteredOrExited = [route.path[0], route.path.at(-1)].filter((stationId): stationId is string => Boolean(stationId));
+  const changedAt: string[] = [];
+  for (const change of route.changes) {
+    if (change.type === 'line') changedAt.push(change.at);
+    else if (change.kind === 'osi') enteredOrExited.push(change.from, change.to);
+    else changedAt.push(change.from, change.to);
+  }
+  return { enteredOrExited, changedAt: changedAt.filter((stationId) => !enteredOrExited.includes(stationId)) };
 }
 
 /** Returns the same object when the route adds nothing new, so callers can compare by reference. */
-export function addRouteToProgress(progress: Progress, route: RouteResult, startStationId: string, endStationId: string): Progress {
-  if (route.sections.length === 0) return progress;
+export function addRouteToProgress(progress: Progress, route: RouteResult): Progress {
+  if (route.links.length === 0) return progress;
 
-  const travelled = appendUnique(progress.travelledSegmentIDs, route.sections.map((section) => section.id));
-  const enteredOrExited = appendUnique(progress.stationsEnteredOrExitedIDs, [startStationId, endStationId]);
-  const changed = appendUnique(progress.stationsChangedAtIDs, route.transferStations);
-  if (
-    travelled === progress.travelledSegmentIDs
-    && enteredOrExited === progress.stationsEnteredOrExitedIDs
-    && changed === progress.stationsChangedAtIDs
-  ) return progress;
-
-  return {
-    travelledSegmentIDs: travelled,
-    stationsEnteredOrExitedIDs: enteredOrExited,
-    stationsChangedAtIDs: changed
+  const { enteredOrExited, changedAt } = getJourneyStations(route);
+  const next: Progress = {
+    travelledSegmentIDs: appendUnique(progress.travelledSegmentIDs, route.sections.map((section) => section.id)),
+    walkedLinkIDs: appendUnique(progress.walkedLinkIDs, route.walks.map((walk) => walk.id)),
+    stationsEnteredOrExitedIDs: appendUnique(progress.stationsEnteredOrExitedIDs, enteredOrExited),
+    stationsChangedAtIDs: appendUnique(progress.stationsChangedAtIDs, changedAt)
   };
+  const unchanged = (Object.keys(next) as Array<keyof Progress>).every((field) => next[field] === progress[field]);
+  return unchanged ? progress : next;
 }
 
 const sectionsByLine = new Map(lines.map((line) => [line.id, sections.filter((section) => section.lineId === line.id)]));

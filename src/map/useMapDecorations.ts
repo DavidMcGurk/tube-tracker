@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { Progress } from '../lib/types';
-import { ensureHighlightLayers, PREVIEW_LAYER_ID, renderSectionHighlights, TRAVELLED_LAYER_ID } from './highlight-layer';
+import { ensureHighlightLayers, PREVIEW_LAYER_ID, renderLinkHighlights, TRAVELLED_LAYER_ID } from './highlight-layer';
 import { applyStationStates, getStationIndex, setStationFlag, type StationIndex } from './station-index';
 
 interface MapDecorationOptions {
@@ -8,14 +8,15 @@ interface MapDecorationOptions {
   svgMarkup: string;
   progress: Progress;
   selectedStationIds: readonly string[];
-  previewSectionIds: readonly string[];
+  /** Links of the selected route not yet travelled. */
+  previewLinkIds: readonly string[];
 }
 
 /**
  * Keeps the inline SVG in sync with app state. Each concern updates independently so that cheap interactions
  * (hover, selection) never redo expensive work (station binding, highlight geometry).
  */
-export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedStationIds, previewSectionIds }: MapDecorationOptions) {
+export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedStationIds, previewLinkIds }: MapDecorationOptions) {
   const indexRef = useRef<StationIndex | null>(null);
   const appliedSelectionRef = useRef<ReadonlySet<string>>(new Set());
   const hoveredStationRef = useRef<string | null>(null);
@@ -35,7 +36,7 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
     const index = indexRef.current;
     if (!svg || !index) return;
     applyStationStates(index, progress);
-    renderSectionHighlights(svg, svgMarkup, TRAVELLED_LAYER_ID, 'app-travelled-section', progress.travelledSegmentIDs);
+    renderLinkHighlights(svg, svgMarkup, TRAVELLED_LAYER_ID, 'app-travelled-section', [...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
   }, [getSvg, svgMarkup, progress]);
 
   useEffect(() => {
@@ -51,11 +52,11 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
     appliedSelectionRef.current = next;
   }, [svgMarkup, selectedStationIds]);
 
-  const previewKey = previewSectionIds.join('|');
+  const previewKey = previewLinkIds.join('|');
   useEffect(() => {
     const svg = getSvg();
     if (!svg || !indexRef.current) return;
-    renderSectionHighlights(svg, svgMarkup, PREVIEW_LAYER_ID, 'app-route-preview-section', previewKey ? previewKey.split('|') : []);
+    renderLinkHighlights(svg, svgMarkup, PREVIEW_LAYER_ID, 'app-route-preview-section', previewKey ? previewKey.split('|') : []);
   }, [getSvg, svgMarkup, previewKey]);
 
   /** Imperative so that pointer movement never re-renders React. */

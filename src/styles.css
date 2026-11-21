@@ -455,3 +455,9 @@ html[data-theme='dark'] .tube-map__svg #text :is(.fcircle, .flioness) :is(text, 
 .tube-map__svg .app-route-preview-section {
   stroke: var(--tt-preview);
 }
+
+/* Walking interchanges are highlighted as a dashed band so they read as walks, not track. */
+.tube-map__svg .app-walk-link {
+  stroke-dasharray: 2 10;
+  stroke-width: calc(var(--tt-highlight-width) * 0.75);
+}

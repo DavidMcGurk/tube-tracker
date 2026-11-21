@@ -1,10 +1,9 @@
-import { sections } from '../data/network';
+import { network } from '../data/network';
 import type { TrackSection } from '../data/track-section';
 import {
   closestPointOnComponent,
   joinTouchingComponents,
   polylineLength,
-  sampleInterchangePath,
   sampleLineComponents,
   toPathData,
   type ClosestPoint,
@@ -33,7 +32,6 @@ interface MapGeometry {
   documentKey: string;
   stationPositions: Map<string, Point[]> | null;
   lineComponents: Map<string, RankedComponent[]>;
-  interchangePath: Point[] | null;
 }
 
 let geometryCache: MapGeometry | null = null;
@@ -41,7 +39,7 @@ const warnedSectionIds = new Set<string>();
 
 function getGeometry(documentKey: string): MapGeometry {
   if (geometryCache?.documentKey !== documentKey) {
-    geometryCache = { documentKey, stationPositions: null, lineComponents: new Map(), interchangePath: null };
+    geometryCache = { documentKey, stationPositions: null, lineComponents: new Map() };
   }
   return geometryCache;
 }
@@ -66,15 +64,6 @@ function warnOnce(sectionId: string, message: string) {
 }
 
 function traceSection(svg: SVGSVGElement, geometry: MapGeometry, section: TrackSection): string | null {
-  if (section.lineId === 'interchange') {
-    const interchangePath = (geometry.interchangePath ??= sampleInterchangePath(svg));
-    if (!interchangePath || interchangePath.length < 2) {
-      warnOnce(section.id, `Unable to show map geometry for interchange section "${section.id}"`);
-      return null;
-    }
-    return toPathData(interchangePath);
-  }
-
   const stationPositions = getStationPositions(svg, geometry);
   const from = stationPositions?.get(section.from);
   const to = stationPositions?.get(section.to);
@@ -169,30 +158,31 @@ export function ensureHighlightLayers(svg: SVGSVGElement) {
 }
 
 /**
- * Draws the given track sections into a highlight layer, following the map's own line geometry.
- * `documentKey` identifies the SVG document so measured geometry can be reused across re-mounts.
+ * Draws the given links into a highlight layer: track sections follow the map's own line geometry, and walking
+ * interchanges follow their drawn connector. `documentKey` identifies the SVG document so measured geometry can be
+ * reused across re-mounts.
  */
-export function renderSectionHighlights(
+export function renderLinkHighlights(
   svg: SVGSVGElement,
   documentKey: string,
   layerId: string,
   className: string,
-  sectionIds: readonly string[]
+  linkIds: readonly string[]
 ) {
   const layer = svg.querySelector<SVGGElement>(`#${layerId}`);
   if (!layer) return;
   layer.replaceChildren();
-  if (sectionIds.length === 0) return;
+  if (linkIds.length === 0) return;
 
   const geometry = getGeometry(documentKey);
-  const requested = new Set(sectionIds);
-  for (const section of sections) {
-    if (!requested.has(section.id)) continue;
-    const pathData = traceSection(svg, geometry, section);
+  for (const linkId of new Set(linkIds)) {
+    const link = network.getLink(linkId);
+    if (!link) continue;
+    const pathData = link.type === 'walk' ? link.mapPath : traceSection(svg, geometry, link);
     if (!pathData) continue;
     const path = svg.ownerDocument.createElementNS(SVG_NS, 'path');
-    path.setAttribute('class', className);
-    path.setAttribute('data-app-section-id', section.id);
+    path.setAttribute('class', link.type === 'walk' ? `${className} app-walk-link` : className);
+    path.setAttribute('data-app-link-id', link.id);
     path.setAttribute('d', pathData);
     layer.appendChild(path);
   }

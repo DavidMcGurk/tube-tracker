@@ -1,29 +1,43 @@
-import { getStationById, lines } from '../data/network';
-import type { LineDefinition, RouteResult } from './types';
+import { getStationById, lines, stations } from '../data/network';
+import type { LineDefinition, RouteChange, RouteResult } from './types';
 
 export const lineById: ReadonlyMap<string, LineDefinition> = new Map(lines.map((line) => [line.id, line]));
 
-const INTERCHANGE_NAME = 'Bank–Monument interchange';
-
 export function getLineName(lineId: string) {
-  return lineId === 'interchange' ? INTERCHANGE_NAME : lineById.get(lineId)?.name ?? lineId;
+  return lineById.get(lineId)?.name ?? lineId;
 }
 
-/** The sequence of lines ridden, collapsing consecutive sections on the same line. */
-export function getRouteLineNames(route: RouteResult) {
-  const lineIds = route.sections.reduce<string[]>((result, section) => {
-    if (result.at(-1) !== section.lineId) result.push(section.lineId);
-    return result;
-  }, []);
-  return lineIds.map(getLineName);
+const stationNameCounts = stations.reduce((counts, station) => counts.set(station.name, (counts.get(station.name) ?? 0) + 1), new Map<string, number>());
+
+/** The station's name, with its lines appended when another station shares the name (e.g. the two Edgware Roads). */
+export function getStationName(stationId: string) {
+  const station = getStationById(stationId);
+  if (!station) return stationId;
+  if ((stationNameCounts.get(station.name) ?? 0) < 2) return station.name;
+  return `${station.name} (${station.lines.map(getLineName).join(', ')})`;
 }
 
-export function getRouteTransferNames(route: RouteResult) {
-  return route.transferStations.map((stationId) => getStationById(stationId)?.name ?? stationId);
+/** Each leg of the journey in order, e.g. ["Northern", "Walk"]. */
+export function getRouteLegNames(route: RouteResult) {
+  return route.legs.map((leg) => (leg.type === 'walk' ? 'Walk' : getLineName(leg.lineId)));
 }
 
-export function getRouteDistance(route: RouteResult) {
-  return route.sections.reduce((total, section) => total + section.distance, 0);
+function describeChange(change: RouteChange) {
+  return change.type === 'line'
+    ? `change at ${getStationName(change.at)}`
+    : `walk ${getStationName(change.from)} → ${getStationName(change.to)}`;
+}
+
+/** e.g. "Change at Bond Street · walk Camden Town → Camden Road", or '' for a direct journey. */
+export function describeRouteChanges(route: RouteResult, { capitalise = true } = {}) {
+  const text = route.changes.map(describeChange).join(' · ');
+  return capitalise && text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+/** e.g. "Northern → Walk", with the distinguishing station when another option rides the same legs. */
+export function describeRouteTitle(route: RouteResult) {
+  const legs = getRouteLegNames(route).join(' → ');
+  return route.via ? `${legs} (via ${getStationName(route.via)})` : legs;
 }
 
 export function formatDistance(metres: number) {
@@ -32,4 +46,16 @@ export function formatDistance(metres: number) {
 
 export function formatKilometres(metres: number) {
   return (metres / 1000).toFixed(1);
+}
+
+/** e.g. "5.2 km + 450 m walk", "350 m walk" or "12.1 km". */
+export function describeRouteDistance(route: RouteResult) {
+  if (route.trackDistance === 0) return `${formatDistance(route.walkDistance)} walk`;
+  const track = formatDistance(route.trackDistance);
+  return route.walkDistance > 0 ? `${track} + ${formatDistance(route.walkDistance)} walk` : track;
+}
+
+export function describeRouteNumberOfChanges(route: RouteResult) {
+  const count = route.changes.length;
+  return count === 0 ? 'no changes' : `${count} ${count === 1 ? 'change' : 'changes'}`;
 }

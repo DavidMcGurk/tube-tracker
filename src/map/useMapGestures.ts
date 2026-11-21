@@ -10,7 +10,7 @@ export interface MapGestureCallbacks {
   onStationActivate: (stationId: string) => void;
   /** A long press on a station. */
   onStationInspect: (stationId: string) => void;
-  /** A double click on a station. */
+  /** A double click (or double tap) on one station. */
   onStationDoubleClick: (stationId: string) => void;
   /** Dragging from one station and releasing over another. */
   onStationDragSelect: (fromStationId: string, toStationId: string) => void;
@@ -37,6 +37,8 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
   const pressRef = useRef<{ pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   const suppressClickRef = useRef(false);
   const suppressClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Stations of the two most recent clicks: browsers also fire dblclick for quick taps on two different stations. */
+  const recentClicksRef = useRef<Array<string | null>>([]);
 
   const clearSuppressClick = useCallback(() => {
     suppressClickRef.current = false;
@@ -148,12 +150,14 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
       return;
     }
     const stationId = stationIdAt(event.target);
+    recentClicksRef.current = [recentClicksRef.current.at(-1) ?? null, stationId];
     if (stationId) callbacksRef.current.onStationActivate(stationId);
   }, [clearSuppressClick]);
 
   const onDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     const stationId = stationIdAt(event.target);
-    if (!stationId) return;
+    const [previous, latest] = recentClicksRef.current;
+    if (!stationId || previous !== stationId || latest !== stationId) return;
     event.preventDefault();
     callbacksRef.current.onStationDoubleClick(stationId);
   }, []);

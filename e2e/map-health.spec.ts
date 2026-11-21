@@ -61,3 +61,41 @@ test('hovering a station does no route-geometry work', async ({ page }) => {
   const calls = await page.evaluate(() => (window as unknown as { __pointAtLengthCalls: number }).__pointAtLengthCalls);
   expect(calls).toBe(0);
 });
+
+test('every walking interchange is drawn between its two stations', async ({ page }) => {
+  await openMap(page);
+  const problems = await page.evaluate(`(async () => {
+    const { walkLinks } = await import('/src/data/network.ts');
+    const { measureStationAnchors } = await import('/src/map/station-anchors.ts');
+    const svg = document.querySelector('.tube-map-viewport svg');
+    const anchors = measureStationAnchors(svg);
+    const problems = [];
+    for (const walk of walkLinks) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', walk.mapPath);
+      svg.appendChild(path);
+      const start = path.getPointAtLength(0);
+      const end = path.getPointAtLength(path.getTotalLength());
+      path.remove();
+      const distanceTo = (point, stationId) => Math.min(...(anchors.get(stationId) ?? []).map((anchor) => Math.hypot(anchor.x - point.x, anchor.y - point.y)));
+      const gap = Math.min(
+        Math.max(distanceTo(start, walk.from), distanceTo(end, walk.to)),
+        Math.max(distanceTo(start, walk.to), distanceTo(end, walk.from))
+      );
+      if (!(gap <= 12)) problems.push(walk.id + ' is ' + gap.toFixed(1) + ' units from a station');
+    }
+    return problems;
+  })()`);
+  expect(problems).toEqual([]);
+});
+
+test('recorded walks are highlighted as walks', async ({ page }) => {
+  await openMap(page);
+  await page.evaluate(`(async () => {
+    const storage = await import('/src/lib/storage.ts');
+    await storage.saveProgress({ travelledSegmentIDs: [], walkedLinkIDs: ['osi_camden_town_camden_road', 'isi_bank_monument'], stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] });
+  })()`);
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator('#app-travelled-sections path.app-walk-link')).toHaveCount(2);
+});

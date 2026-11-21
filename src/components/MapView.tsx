@@ -27,17 +27,17 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
   const [inspectedStationId, setInspectedStationId] = useState<string | null>(null);
   const { activeRoute, selectedStationIds } = selection;
 
-  const newRouteSectionIds = useMemo(() => {
-    const travelled = new Set(progress.travelledSegmentIDs);
-    return activeRoute?.sections.filter((section) => !travelled.has(section.id)).map((section) => section.id) ?? [];
-  }, [activeRoute, progress.travelledSegmentIDs]);
+  const newRouteLinkIds = useMemo(() => {
+    const recorded = new Set([...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
+    return activeRoute?.links.filter((link) => !recorded.has(link.id)).map((link) => link.id) ?? [];
+  }, [activeRoute, progress.travelledSegmentIDs, progress.walkedLinkIDs]);
 
   const decorations = useMapDecorations({
     viewportRef,
     svgMarkup: markup,
     progress,
     selectedStationIds,
-    previewSectionIds: newRouteSectionIds
+    previewLinkIds: newRouteLinkIds
   });
 
   const gestures = useMapGestures({
@@ -46,10 +46,8 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
       selection.toggleStation(stationId);
     },
     onStationInspect: setInspectedStationId,
-    onStationDoubleClick: (stationId) => {
-      setInspectedStationId(stationId);
-      selection.clearSelection();
-    },
+    // The two clicks of a double click already toggled the station on and off, so the selection is unchanged.
+    onStationDoubleClick: setInspectedStationId,
     onStationDragSelect: (fromStationId, toStationId) => {
       setInspectedStationId(null);
       selection.selectPair(fromStationId, toStationId);
@@ -73,7 +71,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           onToggleFullscreen={onToggleFullscreen}
           resolvedTheme={resolvedTheme}
           onToggleTheme={onToggleTheme}
-          showNewRouteLegend={newRouteSectionIds.length > 0}
+          showNewRouteLegend={newRouteLinkIds.length > 0}
         />
 
         <div
