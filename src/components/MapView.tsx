@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { getStationById } from '../data/network';
 import type { RouteSelection } from '../hooks/useRouteSelection';
+import { formatMapZoom } from '../lib/map-zoom';
 import { getLineName } from '../lib/route-format';
 import type { Progress, ResolvedTheme, RouteResult } from '../lib/types';
 import { useMapDecorations } from '../map/useMapDecorations';
 import { useMapGestures } from '../map/useMapGestures';
 import { useMapViewport } from '../map/useMapViewport';
+import { useMapZoomGestures } from '../map/useMapZoomGestures';
 import { useReferenceMapSvg } from '../map/useReferenceMapSvg';
 import { MapToolbar } from './MapToolbar';
 import { RouteActionBar } from './RouteActionBar';
@@ -22,6 +24,7 @@ interface MapViewProps {
 
 export function MapView({ progress, selection, onRecordRoute, fullscreen, onToggleFullscreen, resolvedTheme, onToggleTheme }: MapViewProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const zoomReadoutRef = useRef<HTMLSpanElement | null>(null);
   const { markup, error: mapLoadError } = useReferenceMapSvg();
   const viewport = useMapViewport({ viewportRef, svgMarkup: markup, fullscreen });
   const [inspectedStationId, setInspectedStationId] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
     previewSectionIds: newRouteSectionIds
   });
 
-  const gestures = useMapGestures({
+  const { cancelInteractions, ...gestureHandlers } = useMapGestures({
     onStationActivate: (stationId) => {
       setInspectedStationId(null);
       selection.toggleStation(stationId);
@@ -57,6 +60,19 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
     onStationHover: decorations.setHoveredStation
   });
 
+  useMapZoomGestures({
+    viewportRef,
+    svgMarkup: markup,
+    getZoom: viewport.getZoom,
+    onTouchPinchStart: cancelInteractions,
+    onTouchPinchEnd: cancelInteractions,
+    // Updated directly so a pinch does not re-render the map view every frame.
+    onPreview: (zoom) => {
+      if (zoomReadoutRef.current) zoomReadoutRef.current.textContent = formatMapZoom(zoom);
+    },
+    onCommit: viewport.commitZoom
+  });
+
   const inspectedStation = inspectedStationId ? getStationById(inspectedStationId) : undefined;
 
   return (
@@ -65,6 +81,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
         <MapToolbar
           onClear={selection.clearSelection}
           zoom={viewport.zoom}
+          zoomReadoutRef={zoomReadoutRef}
           canZoomIn={viewport.canZoomIn}
           canZoomOut={viewport.canZoomOut}
           onZoomIn={viewport.zoomIn}
@@ -79,7 +96,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
         <div
           ref={viewportRef}
           className="tube-map-viewport overflow-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700"
-          {...gestures}
+          {...gestureHandlers}
           onScroll={viewport.handleScroll}
           aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan."
           dangerouslySetInnerHTML={{ __html: markup }}

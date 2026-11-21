@@ -132,6 +132,21 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
     }
   }, [viewportRef, fullscreen, zoom, svgMarkup, isMobileViewport]);
 
+  /**
+   * Applies a zoom chosen by a gesture, with the scroll offset that keeps its anchor in place. The view is recorded
+   * before React re-renders so the layout effect sees no zoom change and does not re-anchor at the centre.
+   */
+  const commitZoom = useCallback((nextZoom: number, scrollLeft: number, scrollTop: number) => {
+    const viewport = viewportRef.current;
+    const svg = viewport?.querySelector('svg');
+    if (!viewport || !svg) return;
+    svg.style.width = `${nextZoom * 100}%`;
+    viewport.scrollLeft = scrollLeft;
+    viewport.scrollTop = scrollTop;
+    viewRef.current = { zoom: nextZoom, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    setZoom(nextZoom);
+  }, [viewportRef]);
+
   const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     viewRef.current = {
       zoom: viewRef.current.zoom,
@@ -146,6 +161,9 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
     canZoomOut: zoom > MIN_MAP_ZOOM,
     zoomIn: useCallback(() => setZoom((current) => stepMapZoom(current, ZOOM_STEP)), []),
     zoomOut: useCallback(() => setZoom((current) => stepMapZoom(current, -ZOOM_STEP)), []),
+    /** The zoom the SVG is currently laid out at. */
+    getZoom: useCallback(() => viewRef.current.zoom, []),
+    commitZoom,
     handleScroll
   };
 }

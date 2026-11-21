@@ -24,16 +24,21 @@ function stationIdAt(target: EventTarget | Element | null) {
     : null;
 }
 
+function releasePointerCapture(element: Element, pointerId: number) {
+  if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
+}
+
 /**
  * Pointer handling for the map viewport: mouse panning of empty space, long-press inspection, drag-to-select between
- * stations, hover tracking, and suppression of the click that follows a long press or drag.
+ * stations, hover tracking, and suppression of the click that follows a long press or drag. A second finger cancels all
+ * of these, because it starts a pinch.
  */
 export function useMapGestures(callbacks: MapGestureCallbacks) {
   const callbacksRef = useRef(callbacks);
   useLayoutEffect(() => { callbacksRef.current = callbacks; });
 
-  const panRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
-  const stationDragRef = useRef<{ pointerId: number; stationId: string; x: number; y: number; dragged: boolean } | null>(null);
+  const panRef = useRef<{ element: HTMLDivElement; pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const stationDragRef = useRef<{ element: HTMLDivElement; pointerId: number; stationId: string; x: number; y: number; dragged: boolean } | null>(null);
   const pressRef = useRef<{ pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   const suppressClickRef = useRef(false);
   const suppressClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,13 +61,39 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
     pressRef.current = null;
   }, []);
 
+  /**
+   * Abandons any press, station drag or pan in progress and swallows the click that would end it, e.g. when a second
+   * finger turns the touch into a pinch.
+   */
+  const cancelInteractions = useCallback(() => {
+    cancelPress();
+    const pan = panRef.current;
+    panRef.current = null;
+    if (pan) {
+      pan.element.classList.remove('is-panning');
+      releasePointerCapture(pan.element, pan.pointerId);
+    }
+    const stationDrag = stationDragRef.current;
+    stationDragRef.current = null;
+    if (stationDrag) releasePointerCapture(stationDrag.element, stationDrag.pointerId);
+    callbacksRef.current.onStationHover(null);
+    suppressNextClick();
+  }, [cancelPress, suppressNextClick]);
+
   useEffect(() => () => {
     if (pressRef.current) clearTimeout(pressRef.current.timer);
     if (suppressClickTimeoutRef.current) clearTimeout(suppressClickTimeoutRef.current);
   }, []);
 
   const onPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch' && !event.isPrimary) {
+      // A second finger means a pinch (see useMapZoomGestures), so neither finger may select or inspect a station.
+      cancelInteractions();
+      return;
+    }
     if (event.button !== 0) return;
+    // Suppression only applies to the click that ends the previous press, even if the browser never sent that click.
+    clearSuppressClick();
     const stationId = stationIdAt(event.target);
     if (stationId) {
       cancelPress();
@@ -72,12 +103,20 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
         callbacksRef.current.onStationInspect(stationId);
       }, LONG_PRESS_MS);
       pressRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
-      stationDragRef.current = { pointerId: event.pointerId, stationId, x: event.clientX, y: event.clientY, dragged: false };
+      stationDragRef.current = {
+        element: event.currentTarget,
+        pointerId: event.pointerId,
+        stationId,
+        x: event.clientX,
+        y: event.clientY,
+        dragged: false
+      };
       return;
     }
 
     const viewport = event.currentTarget;
     panRef.current = {
+      element: viewport,
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
@@ -87,7 +126,7 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
     viewport.setPointerCapture(event.pointerId);
     viewport.classList.add('is-panning');
     event.preventDefault();
-  }, [cancelPress, suppressNextClick]);
+  }, [cancelInteractions, cancelPress, clearSuppressClick, suppressNextClick]);
 
   const onPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const stationDrag = stationDragRef.current;
@@ -117,9 +156,7 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
 
   const onPointerEnd = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const viewport = event.currentTarget;
-    const releaseCapture = () => {
-      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-    };
+    const releaseCapture = () => releasePointerCapture(viewport, event.pointerId);
 
     const stationDrag = stationDragRef.current;
     if (stationDrag?.pointerId === event.pointerId) {
@@ -167,6 +204,7 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
   }, []);
 
   const onPointerOver = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch' && !event.isPrimary) return;
     callbacksRef.current.onStationHover(stationIdAt(event.target));
   }, []);
 
@@ -175,6 +213,7 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
   }, []);
 
   return {
+    cancelInteractions,
     onPointerDown,
     onPointerMove,
     onPointerUp: onPointerEnd,
