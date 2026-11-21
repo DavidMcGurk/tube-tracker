@@ -127,13 +127,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect.poll(async () => (await readFills()).entered).toBe(expected.entered);
     const fills = await readFills();
     expect(fills.neutral).not.toBe(expected.entered);
-    // Stations only passed through are not marked: same colour and no glow, like stations never visited.
+    // Stations only passed through are not marked: same colour as stations never visited.
     expect(fills.passedThrough).toBe(fills.neutral);
-    expect(fills.glows.passedThrough).toBe('none');
-    expect(fills.glows.neutral).toBe('none');
-    expect(fills.glows.entered).toContain('drop-shadow');
-    expect(fills.glows.changed).toContain('drop-shadow');
-    expect(fills.glows.changed).not.toBe(fills.glows.entered);
+    // Only names are coloured: no station marker glows, whatever its journey state.
+    expect(fills.glows).toEqual({ entered: 'none', changed: 'none', passedThrough: 'none', neutral: 'none' });
     expect(fills.changed.length).toBeGreaterThan(0);
     for (const labelFills of fills.changed) expect(new Set(labelFills)).toEqual(new Set([expected.changed]));
   });

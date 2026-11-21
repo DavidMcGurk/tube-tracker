@@ -21,7 +21,7 @@ export function TravelledSwatch({ progressStyle }: { progressStyle: ProgressStyl
   );
 }
 
-/** A small picture of the selected route's new track: an orange dashed path with an edge, drawn over the lines. */
+/** A small picture of the selected route: an orange dashed path with an edge, drawn over the lines. */
 export function PreviewSwatch() {
   return (
     <svg className="h-3 w-7 shrink-0" viewBox="0 0 28 12" aria-hidden="true">

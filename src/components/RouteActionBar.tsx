@@ -10,7 +10,6 @@ const ROUTE_BAR_HEIGHT_PROPERTY = '--tt-route-bar-height';
 
 interface RouteActionBarProps {
   /** Whether the selected route includes track (or walks) not yet recorded, shown in the preview colour. */
-  hasNewTrack: boolean;
   selectedStationIds: readonly string[];
   routeOptions: readonly RouteResult[];
   activeRoute: RouteResult;
@@ -54,12 +53,10 @@ export function RouteActionBar(props: RouteActionBarProps) {
     <div ref={barRef} className={`route-action-bar mt-3 flex justify-end${chooserOpen ? ' has-options' : ''}`}>
       <div className="route-primary-action flex w-full flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1 text-sm font-medium">
-          {props.hasNewTrack && (
-            <span className="mr-1.5 inline-flex align-[-0.1em]">
-              <PreviewSwatch />
-              <span className="sr-only">New track is shown as an orange dashed line. </span>
-            </span>
-          )}
+          <span className="mr-1.5 inline-flex align-[-0.1em]">
+            <PreviewSwatch />
+            <span className="sr-only">The route is shown on the map as an orange dashed line. </span>
+          </span>
           Route {props.activeRouteIndex + 1}: {describeRouteTitle(activeRoute)}
           {endpoints && <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{endpoints}</span>}
           {changesText && <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{changesText}</span>}

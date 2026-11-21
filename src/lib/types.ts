@@ -5,7 +5,7 @@ export type TransportSystem = 'Underground' | 'Overground' | 'DLR' | 'Elizabeth 
 
 export type Theme = 'light' | 'dark' | 'system';
 export type ResolvedTheme = Exclude<Theme, 'system'>;
-/** How travelled track is shown: the map's own lines at full width with untravelled lines thinner, or a yellow band. */
+/** How travelled track is shown: bold lines in their own colours with untravelled lines thinner, or a yellow band. */
 export type ProgressStyle = 'lines' | 'band';
 
 export interface LineDefinition {

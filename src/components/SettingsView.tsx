@@ -16,7 +16,7 @@ interface SettingsViewProps {
 }
 
 const PROGRESS_STYLE_OPTIONS: ReadonlyArray<{ value: ProgressStyle; label: string; description: string }> = [
-  { value: 'lines', label: 'Bold lines', description: 'Travelled track keeps its full width; lines you haven’t travelled are drawn thinner.' },
+  { value: 'lines', label: 'Bold lines', description: 'Travelled track is drawn bold in its line’s colour; lines you haven’t travelled are drawn thinner.' },
   { value: 'band', label: 'Yellow highlight', description: 'Travelled track is highlighted with a yellow band beneath the lines.' }
 ];
 

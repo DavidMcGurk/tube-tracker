@@ -11,10 +11,14 @@ export interface Point {
 /** A continuous run of samples along one drawn path (paths are split wherever consecutive samples jump apart). */
 export type PathComponent = readonly Point[];
 
-/** A component plus the rank of the SVG class it came from (0 = the line's primary class). */
+/**
+ * A component plus the rank of the SVG class it came from (0 = the line's primary class), and whether the map marks
+ * its path as a part-time service with white dashes (a `.branch` overlay, e.g. the District line's Olympia branch).
+ */
 export interface RankedComponent {
   points: PathComponent;
   classRank: number;
+  partTime?: boolean;
 }
 
 export interface ClosestPoint {
@@ -78,12 +82,15 @@ export function sampleLineComponents(svg: SVGSVGElement, lineId: string): Ranked
   if (!svgMatrix) return null;
   const screenToSvg = svgMatrix.inverse();
 
+  const partTimePathIds = new Set([...svg.querySelectorAll('#routes use.branch')].map((overlay) =>
+    (overlay.getAttribute('href') ?? overlay.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?? '').replace(/^#/, '')));
   const components: RankedComponent[] = [];
   getLineSvgClasses(lineId).forEach((pathClass, classRank) => {
     for (const path of svg.querySelectorAll<SVGPathElement>(`#routes .s${pathClass} path, #routes path.s${pathClass}`)) {
       const samples = samplePath(path, screenToSvg);
       if (!samples) continue;
-      for (const points of splitIntoComponents(samples)) components.push({ points, classRank });
+      const partTime = partTimePathIds.has(path.id);
+      for (const points of splitIntoComponents(samples)) components.push({ points, classRank, ...(partTime ? { partTime } : {}) });
     }
   });
   return components;

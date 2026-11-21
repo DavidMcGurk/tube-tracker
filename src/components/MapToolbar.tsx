@@ -71,16 +71,15 @@ export function MapToolbar(props: MapToolbarProps) {
             <TravelledSwatch progressStyle={props.progressStyle} />
             Travelled
             <span className="sr-only">
-              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn at full width; other lines are thinner'}
+              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn bold; other lines are thinner'}
             </span>
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-entered)" aria-hidden="true" />
-            Visited<span className="sr-only">: stations you entered or exited are green</span>
+          {/* Station names are coloured by journey state (the markers are not), so the legend shows coloured words too. */}
+          <span className="font-semibold text-(--tt-label-entered)">
+            Visited<span className="sr-only">: names of stations you entered or exited are green</span>
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-changed)" aria-hidden="true" />
-            Changed<span className="sr-only">: stations where you changed lines are purple</span>
+          <span className="font-semibold text-(--tt-label-changed)">
+            Changed<span className="sr-only">: names of stations where you changed lines are purple</span>
           </span>
         </div>
       </div>
