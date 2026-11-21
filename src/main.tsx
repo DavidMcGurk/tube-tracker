@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { startAppUpdates } from './lib/app-updates';
 import { initInstallPromptCapture } from './lib/install-prompt';
 import './styles.css';
 
@@ -11,3 +12,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>
 );
+
+startAppUpdates();
