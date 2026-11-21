@@ -34,11 +34,6 @@ export function useRouteSelection() {
     setSelectedStationIds((current) => toggleStationSelection(current, stationId));
   }, [resetRouteChoice]);
 
-  const selectPair = useCallback((fromStationId: string, toStationId: string) => {
-    resetRouteChoice();
-    setSelectedStationIds([fromStationId, toStationId]);
-  }, [resetRouteChoice]);
-
   const clearSelection = useCallback(() => {
     resetRouteChoice();
     setSelectedStationIds([]);
@@ -66,7 +61,6 @@ export function useRouteSelection() {
     activeRouteIndex,
     chooserOpen,
     toggleStation,
-    selectPair,
     clearSelection,
     restoreSelection,
     chooseRoute,

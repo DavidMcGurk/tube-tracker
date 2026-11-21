@@ -69,7 +69,7 @@ test('recorded progress and the chosen theme persist across reloads', async ({ p
   await expect(page.locator('#app-travelled-sections path').first()).toBeAttached();
 });
 
-test('long-press inspects a station and drag selects a journey (mouse)', async ({ page }, testInfo) => {
+test('long-press inspects a station; dragging from a station pans the map instead of selecting (mouse)', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'laptop-1280', 'mouse gestures');
   await openMap(page);
 
@@ -81,13 +81,22 @@ test('long-press inspects a station and drag selects a journey (mouse)', async (
   await expect(page.locator('.map-inspection-panel')).toContainText('Paddington');
   await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-selected', 'false');
 
-  const waterloo = await centreOf(stationLabel(page, 'waterloo'));
-  await page.mouse.move(paddington.x, paddington.y);
+  const viewport = page.locator('.tube-map-viewport');
+  const before = await viewport.evaluate((element) => [element.scrollLeft, element.scrollTop]);
+  const start = await centreOf(stationLabel(page, 'paddington'));
+  await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.mouse.move(waterloo.x, waterloo.y, { steps: 8 });
+  await page.mouse.move(start.x - 120, start.y - 60, { steps: 8 });
   await page.mouse.up();
-  await expect(page.locator('.route-action-bar')).toContainText('Paddington → Waterloo');
-  await expect(page.locator('.map-inspection-panel')).toBeHidden();
+  const after = await viewport.evaluate((element) => [element.scrollLeft, element.scrollTop]);
+  expect(after[0]! - before[0]!).toBeGreaterThan(100);
+  expect(after[1]! - before[1]!).toBeGreaterThan(40);
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-selected', 'false');
+  await expect(page.locator('.route-action-bar')).toBeHidden();
+
+  // A plain click still selects.
+  await stationLabel(page, 'waterloo').click();
+  await expect(stationLabel(page, 'waterloo')).toHaveAttribute('data-app-selected', 'true');
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {

@@ -12,9 +12,7 @@ export interface MapGestureCallbacks {
   onStationInspect: (stationId: string) => void;
   /** A double click (or double tap) on one station. */
   onStationDoubleClick: (stationId: string) => void;
-  /** Dragging from one station and releasing over another. */
-  onStationDragSelect: (fromStationId: string, toStationId: string) => void;
-  /** The station under the pointer (or drag) changed. */
+  /** The station under the pointer changed. */
   onStationHover: (stationId: string | null) => void;
 }
 
@@ -29,16 +27,25 @@ function releasePointerCapture(element: Element, pointerId: number) {
 }
 
 /**
- * Pointer handling for the map viewport: mouse panning of empty space, long-press inspection, drag-to-select between
- * stations, hover tracking, and suppression of the click that follows a long press or drag. A second finger cancels all
- * of these, because it starts a pinch.
+ * Pointer handling for the map viewport. Clicking a station selects it (journeys are chosen by clicking the start and
+ * end stations); pressing and dragging anywhere, stations included, pans the map; a long press on a station shows its
+ * details. The click that ends a drag or long press is swallowed. A second finger cancels all of these, because it
+ * starts a pinch. (On touch screens, one-finger panning is the browser's own scrolling.)
  */
 export function useMapGestures(callbacks: MapGestureCallbacks) {
   const callbacksRef = useRef(callbacks);
   useLayoutEffect(() => { callbacksRef.current = callbacks; });
 
-  const panRef = useRef<{ element: HTMLDivElement; pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
-  const stationDragRef = useRef<{ element: HTMLDivElement; pointerId: number; stationId: string; x: number; y: number; dragged: boolean } | null>(null);
+  /** A press that pans the map once it moves past the drag threshold (immediately if it began on empty map). */
+  const panRef = useRef<{
+    element: HTMLDivElement;
+    pointerId: number;
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+    panning: boolean;
+  } | null>(null);
   const pressRef = useRef<{ pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   const suppressClickRef = useRef(false);
   const suppressClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,24 +70,30 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
     pressRef.current = null;
   }, []);
 
+  const startPanning = useCallback((pan: NonNullable<typeof panRef.current>) => {
+    pan.panning = true;
+    pan.element.setPointerCapture(pan.pointerId);
+    pan.element.classList.add('is-panning');
+  }, []);
+
+  const endPan = useCallback(() => {
+    const pan = panRef.current;
+    panRef.current = null;
+    if (!pan) return;
+    pan.element.classList.remove('is-panning');
+    releasePointerCapture(pan.element, pan.pointerId);
+  }, []);
+
   /**
-   * Abandons any press, station drag or pan in progress and swallows the click that would end it, e.g. when a second
-   * finger turns the touch into a pinch.
+   * Abandons any press or pan in progress and swallows the click that would end it, e.g. when a second finger turns
+   * the touch into a pinch.
    */
   const cancelInteractions = useCallback(() => {
     cancelPress();
-    const pan = panRef.current;
-    panRef.current = null;
-    if (pan) {
-      pan.element.classList.remove('is-panning');
-      releasePointerCapture(pan.element, pan.pointerId);
-    }
-    const stationDrag = stationDragRef.current;
-    stationDragRef.current = null;
-    if (stationDrag) releasePointerCapture(stationDrag.element, stationDrag.pointerId);
+    endPan();
     callbacksRef.current.onStationHover(null);
     suppressNextClick();
-  }, [cancelPress, suppressNextClick]);
+  }, [cancelPress, endPan, suppressNextClick]);
 
   useEffect(() => () => {
     if (pressRef.current) clearTimeout(pressRef.current.timer);
@@ -96,90 +109,55 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
     if (event.button !== 0) return;
     // Suppression only applies to the click that ends the previous press, even if the browser never sent that click.
     clearSuppressClick();
+    cancelPress();
+    const viewport = event.currentTarget;
+    const pan = {
+      element: viewport,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      panning: false
+    };
+    panRef.current = pan;
+
     const stationId = stationIdAt(event.target);
     if (stationId) {
-      cancelPress();
+      // Not panning yet: released without moving, this press is a click that selects the station.
       const timer = setTimeout(() => {
         pressRef.current = null;
         suppressNextClick();
         callbacksRef.current.onStationInspect(stationId);
       }, LONG_PRESS_MS);
       pressRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
-      stationDragRef.current = {
-        element: event.currentTarget,
-        pointerId: event.pointerId,
-        stationId,
-        x: event.clientX,
-        y: event.clientY,
-        dragged: false
-      };
       return;
     }
 
-    const viewport = event.currentTarget;
-    panRef.current = {
-      element: viewport,
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop
-    };
-    viewport.setPointerCapture(event.pointerId);
-    viewport.classList.add('is-panning');
+    startPanning(pan);
     event.preventDefault();
-  }, [cancelInteractions, cancelPress, clearSuppressClick, suppressNextClick]);
+  }, [cancelInteractions, cancelPress, clearSuppressClick, startPanning, suppressNextClick]);
 
   const onPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const stationDrag = stationDragRef.current;
-    if (
-      stationDrag?.pointerId === event.pointerId
-      && Math.hypot(event.clientX - stationDrag.x, event.clientY - stationDrag.y) > DRAG_THRESHOLD_PX
-    ) {
-      if (!stationDrag.dragged) {
-        stationDrag.dragged = true;
-        cancelPress(event.pointerId);
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
-      callbacksRef.current.onStationHover(stationIdAt(document.elementFromPoint(event.clientX, event.clientY)));
-      event.preventDefault();
-      return;
-    }
-
-    const press = pressRef.current;
-    if (press?.pointerId === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) > DRAG_THRESHOLD_PX) {
-      cancelPress(event.pointerId);
-    }
     const pan = panRef.current;
     if (!pan || pan.pointerId !== event.pointerId) return;
+    if (!pan.panning) {
+      if (Math.hypot(event.clientX - pan.x, event.clientY - pan.y) <= DRAG_THRESHOLD_PX) return;
+      cancelPress(event.pointerId);
+      startPanning(pan);
+    }
     event.currentTarget.scrollLeft = pan.scrollLeft - (event.clientX - pan.x);
     event.currentTarget.scrollTop = pan.scrollTop - (event.clientY - pan.y);
-  }, [cancelPress]);
+  }, [cancelPress, startPanning]);
 
   const onPointerEnd = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const viewport = event.currentTarget;
-    const releaseCapture = () => releasePointerCapture(viewport, event.pointerId);
-
-    const stationDrag = stationDragRef.current;
-    if (stationDrag?.pointerId === event.pointerId) {
-      stationDragRef.current = null;
-      if (stationDrag.dragged) {
-        const destinationId = stationIdAt(document.elementFromPoint(event.clientX, event.clientY));
-        if (destinationId && destinationId !== stationDrag.stationId) {
-          callbacksRef.current.onStationDragSelect(stationDrag.stationId, destinationId);
-        }
-        suppressNextClick();
-        releaseCapture();
-        return;
-      }
-    }
-
     cancelPress(event.pointerId);
-    if (panRef.current?.pointerId !== event.pointerId) return;
-    panRef.current = null;
-    viewport.classList.remove('is-panning');
-    releaseCapture();
-  }, [cancelPress, suppressNextClick]);
+    const pan = panRef.current;
+    if (pan?.pointerId !== event.pointerId) return;
+    // A press that panned from a station must not also select it.
+    if (pan.panning) suppressNextClick();
+    endPan();
+  }, [cancelPress, endPan, suppressNextClick]);
 
   const onClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (suppressClickRef.current) {

@@ -58,10 +58,6 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
       if (first?.stationId === stationId) selection.restoreSelection(first.selectionBefore);
       setInspectedStationId(stationId);
     },
-    onStationDragSelect: (fromStationId, toStationId) => {
-      setInspectedStationId(null);
-      selection.selectPair(fromStationId, toStationId);
-    },
     onStationHover: decorations.setHoveredStation
   });
 
@@ -109,7 +105,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           {...gestureHandlers}
           onScroll={viewport.handleScroll}
           role="region"
-          aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan; pinch to zoom."
+          aria-label="Interactive London transport map. Tap a start and an end station to choose a journey; drag to pan; pinch to zoom."
           dangerouslySetInnerHTML={{ __html: markup }}
         />
         {inspectedStation && (
