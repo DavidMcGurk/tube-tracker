@@ -34,6 +34,17 @@ test('every travelled track section can be drawn on the map', async ({ page }) =
 
   expect([...undrawn].sort()).toEqual([...KNOWN_UNDRAWN_SECTIONS].sort());
   expect(errors).toEqual([]);
+
+  // Only the Weaver line's two tracks between Hackney Downs and Bethnal Green are drawn as parallel tracks.
+  const doubled = await page.evaluate((selector) => {
+    const counts = new Map<string, number>();
+    for (const path of document.querySelectorAll(selector)) {
+      const id = path.getAttribute('data-app-link-id')!;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts].filter(([, count]) => count > 1).map(([id]) => id).sort();
+  }, TRAVELLED_LINE_PATHS);
+  expect(doubled).toEqual(['weaver_bethnal_green_weaver_cambridge_heath', 'weaver_cambridge_heath_london_fields', 'weaver_hackney_downs_london_fields']);
 });
 
 test('hovering a station does no route-geometry work', async ({ page }) => {
@@ -100,11 +111,13 @@ test('recorded walks are highlighted as walks', async ({ page }) => {
   await expect(page.locator('#app-travelled-sections path.app-walk-link')).toHaveCount(2);
 });
 
-/** Where the bold-lines style reveals travelled track: a point halfway along a travelled section, in page pixels. */
-async function travelledPointOnScreen(page: Page) {
-  const point = await page.evaluate(() => {
+const TRAVELLED_LINE_PATHS = '#app-travelled-lines [data-part="line"] path';
+
+/** Where the bold-lines style draws travelled track of a line: a point halfway along a travelled section, in page pixels. */
+async function travelledPointOnScreen(page: Page, lineClass: string) {
+  const point = await page.evaluate((selector) => {
     const viewport = document.querySelector('.tube-map-viewport')!.getBoundingClientRect();
-    for (const path of document.querySelectorAll<SVGPathElement>('#app-travelled-mask path')) {
+    for (const path of document.querySelectorAll<SVGPathElement>(selector)) {
       const middle = path.getPointAtLength(path.getTotalLength() / 2);
       const screen = new DOMPoint(middle.x, middle.y).matrixTransform(path.getScreenCTM()!);
       if (screen.x > viewport.left + 20 && screen.x < viewport.right - 20 && screen.y > viewport.top + 20 && screen.y < viewport.bottom - 20) {
@@ -112,7 +125,7 @@ async function travelledPointOnScreen(page: Page) {
       }
     }
     return null;
-  });
+  }, `${TRAVELLED_LINE_PATHS}.${lineClass}`);
   if (!point) throw new Error('No travelled section is on screen');
   return point;
 }
@@ -143,52 +156,169 @@ async function setTravelledSections(page: Page, sectionFilter: string) {
   })()`);
 }
 
-test('by default, travelled track is the full-width line and other lines are thinner', async ({ page }) => {
+test('by default, travelled track is drawn wide and solid in its line colour, and other lines are thinner', async ({ page }) => {
   const errors = collectErrors(page);
   await openMap(page);
-  await seedTravelledSections(page, "section.lineId === 'central'");
+  await seedTravelledSections(page, "['central', 'mildmay', 'circle', 'northern'].includes(section.lineId)");
   await page.reload();
   await openMap(page);
   await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'lines');
-  await expect(page.locator('#app-travelled-mask path').first()).toBeAttached();
+  await expect(page.locator(TRAVELLED_LINE_PATHS).first()).toBeAttached();
 
   const layerOrder = await page.evaluate(() => [...document.querySelector('#routes')!.parentElement!.children]
     .map((element) => element.id)
     .filter((id) => id.startsWith('app-') || id === 'routes'));
   expect(layerOrder).toEqual([
     'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes',
-    'app-travelled-mask', 'app-travelled-routes', 'app-route-preview-sections'
+    'app-travelled-lines', 'app-route-preview-sections'
   ]);
 
-  const drawing = await page.evaluate(() => {
-    const width = (selector: string) => getComputedStyle(document.querySelector(selector)!).strokeWidth;
-    const display = (selector: string) => getComputedStyle(document.querySelector(selector)!).display;
+  const drawing = await page.evaluate((selector) => {
+    const style = (target: string) => getComputedStyle(document.querySelector(target)!);
+    const travelled = (lineClass: string) => style(`${selector}.s${lineClass}`);
     return {
-      untravelledWidth: width('#routes .me.scentral'),
-      travelledWidth: width('#app-travelled-routes .me.scentral'),
-      stripe: display('#routes .mes'),
-      travelledStripe: display('#app-travelled-routes .mes'),
-      band: display('#app-travelled-sections path'),
-      duplicateIds: document.querySelectorAll('#app-travelled-routes [id]').length,
-      maskPaths: document.querySelectorAll('#app-travelled-mask path').length,
+      untravelledWidth: style('#routes .me.scentral').strokeWidth,
+      untravelledStripe: style('#routes .mes').display,
+      travelledWidth: travelled('central').strokeWidth,
+      // Each line keeps the map's own colour, with no white centre stripe on the Overground.
+      colours: [travelled('central').stroke, travelled('mildmay').stroke, travelled('circle').stroke],
+      // The pale Circle line keeps the darker edge the map gives it.
+      circleCasing: style('#app-travelled-lines [data-part="casing"] path.bcircle').stroke,
+      band: style('#app-travelled-sections path').display,
+      linePaths: document.querySelectorAll(selector).length,
       trackPaths: document.querySelectorAll('#app-travelled-sections path:not(.app-walk-link)').length
     };
-  });
+  }, TRAVELLED_LINE_PATHS);
   expect(drawing).toEqual({
-    untravelledWidth: '2.5px', travelledWidth: '5px', stripe: 'none', travelledStripe: 'inline',
-    band: 'none', duplicateIds: 0, maskPaths: drawing.trackPaths, trackPaths: drawing.trackPaths
+    untravelledWidth: '2px', untravelledStripe: 'none', travelledWidth: '6px',
+    colours: ['rgb(220, 36, 31)', 'rgb(55, 132, 199)', 'rgb(255, 206, 0)'],
+    circleCasing: 'rgb(221, 153, 0)',
+    band: 'none', linePaths: drawing.trackPaths, trackPaths: drawing.trackPaths
   });
-  expect(drawing.trackPaths).toBeGreaterThan(30);
+  expect(drawing.trackPaths).toBeGreaterThan(50);
 
-  // The mask really reveals the full-width line: forgetting the Central line leaves only the thin line there.
-  const point = await travelledPointOnScreen(page);
+  // On screen, travelled track is far bolder: forgetting the Central line leaves only the thin line there.
+  // Overlapping travelled lines stack in the map's own order (the Circle above the Central here), not recording order.
+  const stacking = await page.evaluate((selector) => {
+    const classes = [...document.querySelectorAll(selector)].map((path) => path.classList[1]);
+    return { central: classes.lastIndexOf('scentral'), circle: classes.indexOf('scircle') };
+  }, TRAVELLED_LINE_PATHS);
+  expect(stacking.circle).toBeGreaterThan(stacking.central);
+
+  // Black is invisible on the dark map, so travelled Northern track is drawn light, like the map's own Northern line.
+  const northernColour = () => page.evaluate((selector) => getComputedStyle(document.querySelector(`${selector}.snorthern`)!).stroke, TRAVELLED_LINE_PATHS);
+  expect(await northernColour()).toBe('rgb(0, 0, 0)');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(northernColour).toBe('rgb(226, 232, 240)');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(northernColour).toBe('rgb(0, 0, 0)');
+
+  const point = await travelledPointOnScreen(page, 'scentral');
   const travelledRed = await countCentralRedPixels(page, point);
   await setTravelledSections(page, 'false');
-  await expect(page.locator('#app-travelled-mask path')).toHaveCount(0);
+  await expect(page.locator(TRAVELLED_LINE_PATHS)).toHaveCount(0);
   const untravelledRed = await countCentralRedPixels(page, point);
   expect(untravelledRed).toBeGreaterThan(0);
-  expect(travelledRed).toBeGreaterThan(untravelledRed * 1.5);
+  expect(travelledRed).toBeGreaterThan(untravelledRed * 2);
   expect(errors).toEqual([]);
+});
+
+test('station ticks are thin until a travelled section of their line reaches the station', async ({ page }) => {
+  await openMap(page);
+  await seedTravelledSections(page, "section.lineId === 'central'");
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator('#station_nodes use[data-app-tick-travelled]').first()).toBeAttached();
+  const ticks = await page.evaluate(() => {
+    const href = (element: Element) => element.getAttribute('href') ?? element.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?? '';
+    const travelled = [...document.querySelectorAll('#station_nodes use[data-app-tick-travelled]')];
+    const centralTicks = [...document.querySelectorAll('#station_nodes use[id]')].filter((element) => /^#(st|term)central$/.test(href(element)));
+    const transform = (id: string) => document.getElementById(id)!.getAttribute('transform');
+    return {
+      travelledLines: [...new Set(travelled.map((element) => href(element)))].sort(),
+      travelledCount: travelled.length,
+      centralTickCount: centralTicks.length,
+      onTravelledCentral: transform('Northolt'),
+      onUntravelledPiccadilly: transform('Turnpike_Lane'),
+      placedByPosition: transform('Devons_Road')
+    };
+  });
+  expect(ticks.travelledLines).toEqual(['#stcentral', '#termcentral']);
+  expect(ticks.travelledCount, 'every Central line tick, and only those').toBe(ticks.centralTickCount);
+  expect(ticks.centralTickCount).toBeGreaterThan(25);
+  // Untravelled ticks are scaled across their width to match the 2-unit untravelled lines (5 × 0.4).
+  expect(ticks.onTravelledCentral).toBe('translate(158,459.9)rotate(126.87)');
+  expect(ticks.onUntravelledPiccadilly).toBe('translate(1335,74)rotate(126.87) scale(1 0.400)');
+  // A tick placed by x and y is scaled about that point, so it stays where it is.
+  expect(ticks.placedByPosition).toBe('translate(1900 488) scale(1 0.400) translate(-1900 -488)');
+
+  // Untravelled lines are 2.5 units in dark mode, and ticks follow when the theme changes on the open map.
+  const turnpikeLane = page.locator('#Turnpike_Lane');
+  await page.getByRole('banner').getByRole('button', { name: 'Switch to dark mode' }).click();
+  await expect(turnpikeLane).toHaveAttribute('transform', 'translate(1335,74)rotate(126.87) scale(1 0.500)');
+
+  // Without thinning (the band style), every tick gets its own transform back.
+  await page.evaluate(async () => {
+    const ticksModule = await import('/src/map/station-ticks.ts');
+    ticksModule.applyTickProgress(document.querySelector('.tube-map-viewport svg')!, [], null);
+  });
+  await expect(turnpikeLane).toHaveAttribute('transform', 'translate(1335,74)rotate(126.87)');
+  await expect(page.locator('#Devons_Road')).not.toHaveAttribute('transform', /./);
+});
+
+test('a travelled section drawn as two parallel tracks is bold on both; the selected route follows one', async ({ page }, testInfo) => {
+  await openMap(page);
+  // Between Hackney Downs and Bethnal Green the map draws the Weaver line twice, once per service, 10 units apart.
+  await seedTravelledSections(page, "section.id === 'weaver_cambridge_heath_london_fields'");
+  await page.reload();
+  await openMap(page);
+  const weaver = page.locator(`${TRAVELLED_LINE_PATHS}[data-app-link-id="weaver_cambridge_heath_london_fields"]`);
+  await expect(weaver).toHaveCount(2);
+  const xs = await weaver.evaluateAll((paths) => paths.map((path) => (path as SVGPathElement).getPointAtLength(0).x).sort((a, b) => a - b));
+  expect(xs[1]! - xs[0]!, 'one path on each of the two tracks').toBeCloseTo(10, 0);
+
+  await selectStation(page, testInfo, 'cambridge_heath');
+  await selectStation(page, testInfo, 'london_fields');
+  await expect(page.locator('#app-route-preview-sections [data-part="route"] path[data-app-link-id="weaver_cambridge_heath_london_fields"]')).toHaveCount(1);
+});
+
+test('travelled track keeps the white details the map draws over its lines', async ({ page }) => {
+  await openMap(page);
+  await seedTravelledSections(page, "['piccadilly', 'district', 'elizabeth'].includes(section.lineId)");
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator(TRAVELLED_LINE_PATHS).first()).toBeAttached();
+  const drawing = await page.evaluate(() => {
+    const layer = document.querySelector('#app-travelled-lines')!;
+    const parts = [...layer.children].map((part) => part.getAttribute('data-part'));
+    const overlays = [...layer.querySelectorAll('[data-part="map-overlays"] > *')].map((element) => element.getAttribute('href') ?? element.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?? element.tagName);
+    const partTime = [...layer.querySelectorAll('[data-part="part-time"] path')].map((path) => path.getAttribute('data-app-link-id'));
+    return { parts, overlays, partTime: [...new Set(partTime)].sort() };
+  });
+  // The Heathrow loop's one-way arrows and the dividers sit above the travelled lines.
+  expect(drawing.parts).toEqual(['casing', 'line', 'part-time', 'map-overlays']);
+  expect(drawing.overlays).toEqual(['path', '#STRg', '#STRg', 'path']);
+  // Part-time dashes are drawn on travelled Olympia branch track, and on no ordinary District or Piccadilly track.
+  expect(drawing.partTime).toContain('district_earl_s_court_kensington_olympia');
+  expect(drawing.partTime.every((id) => id!.startsWith('district_earl_s_court_kensington_olympia') || id!.startsWith('elizabeth_'))).toBe(true);
+});
+
+test('the Elizabeth line meets its Heathrow Terminal 5 branch without a gap', async ({ page }) => {
+  await openMap(page);
+  // Heathrow Terminals 2 & 3 is marked by a Piccadilly tick; the Elizabeth line is traced from the middle of it.
+  await seedTravelledSections(page, "section.lineId === 'elizabeth'");
+  await page.reload();
+  await openMap(page);
+  const gap = await page.evaluate((selector) => {
+    const ends = (id: string) => {
+      const path = document.querySelector<SVGPathElement>(`${selector}[data-app-link-id="${id}"]`)!;
+      return [path.getPointAtLength(0), path.getPointAtLength(path.getTotalLength())];
+    };
+    const branch = ends('elizabeth_heathrow_terminals_2_3_heathrow_terminal_5');
+    const trunk = ends('elizabeth_hayes_harlington_heathrow_terminals_2_3');
+    return Math.min(...branch.flatMap((a) => trunk.map((b) => Math.hypot(a.x - b.x, a.y - b.y))));
+  }, TRAVELLED_LINE_PATHS);
+  expect(gap).toBeLessThan(9);
 });
 
 test('the yellow band can be chosen in Settings instead, and the choice is remembered', async ({ page }) => {
@@ -211,13 +341,19 @@ test('the yellow band can be chosen in Settings instead, and the choice is remem
   // A casing strip under every travelled line keeps yellow lines visible on the yellow band.
   await expect(page.locator('#app-highlight-casing path')).toHaveCount(travelledCount);
   const drawing = await page.evaluate(() => ({
-    copy: getComputedStyle(document.querySelector('#app-travelled-routes')!).display,
-    lineWidth: getComputedStyle(document.querySelector('#routes .me.scircle')!).strokeWidth
+    travelledLines: getComputedStyle(document.querySelector('#app-travelled-lines')!).display,
+    lineWidth: getComputedStyle(document.querySelector('#routes .me.scircle')!).strokeWidth,
+    thinnedTicks: [...document.querySelectorAll('#station_nodes use[id]')].filter((tick) => tick.getAttribute('transform')?.includes('scale(1 ')).length
   }));
-  expect(drawing).toEqual({ copy: 'none', lineWidth: '5px' });
+  // The band style leaves the map's lines and ticks at their normal widths.
+  expect(drawing).toEqual({ travelledLines: 'none', lineWidth: '5px', thinnedTicks: 0 });
 });
 
-test('the selected route is drawn as a dashed path over the lines', async ({ page }, testInfo) => {
+test('the selected route is drawn as a dashed path over the lines, including track already travelled', async ({ page }, testInfo) => {
+  await openMap(page);
+  // Paddington to Angel goes by Circle (or H&C/Metropolitan) then Northern; the first leg is already travelled.
+  await seedTravelledSections(page, "['circle', 'hammersmith_city', 'metropolitan'].includes(section.lineId)");
+  await page.reload();
   await openMap(page);
   await selectStation(page, testInfo, 'paddington');
   await selectStation(page, testInfo, 'angel');
@@ -225,6 +361,10 @@ test('the selected route is drawn as a dashed path over the lines', async ({ pag
   await expect(route.first()).toBeAttached();
   const routeCount = await route.count();
   await expect(page.locator('#app-route-preview-sections [data-part="casing"] path')).toHaveCount(routeCount);
+  const travelledIds = await page.evaluate(() => [...document.querySelectorAll('#app-travelled-sections path')].map((path) => path.getAttribute('data-app-link-id')));
+  const routeIds = await route.evaluateAll((paths) => paths.map((path) => path.getAttribute('data-app-link-id')));
+  expect(routeIds.filter((id) => travelledIds.includes(id)).length, 'travelled sections of the route are dashed too').toBeGreaterThan(0);
+  expect(routeIds.filter((id) => !travelledIds.includes(id)).length, 'new sections of the route are dashed').toBeGreaterThan(0);
   const style = await route.first().evaluate((path) => {
     const computed = getComputedStyle(path);
     return { dashes: computed.strokeDasharray, width: computed.strokeWidth };

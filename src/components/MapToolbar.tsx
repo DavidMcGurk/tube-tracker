@@ -71,7 +71,7 @@ export function MapToolbar(props: MapToolbarProps) {
             <TravelledSwatch progressStyle={props.progressStyle} />
             Travelled
             <span className="sr-only">
-              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn at full width; other lines are thinner'}
+              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn bold; other lines are thinner'}
             </span>
           </span>
           <span className="inline-flex items-center gap-1.5">

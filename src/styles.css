@@ -23,9 +23,15 @@
   /* A strip between each highlight and its line, so yellow lines (Circle, Lioness) stay distinct from the band. */
   --tt-highlight-casing: #fff;
   --tt-highlight-casing-width: 9px;
+  /*
+   * The bold-lines progress style: travelled track is drawn this wide over the map's lines (which are 5 wide),
+   * and lines and station ticks not yet travelled this thin.
+   */
+  --tt-travelled-line-width: 6px;
+  --tt-untravelled-line-width: 2px;
   /* Walks in the bold-lines progress style, which has no band to draw them in. */
   --tt-walked: #64748b;
-  /* The selected route's new track: a dashed path drawn over the lines, with an edge separating it from them. */
+  /* The selected route: a dashed path drawn over the lines, with an edge separating it from them. */
   --tt-preview: #f97316;
   --tt-preview-edge: #fff;
 
@@ -52,6 +58,8 @@ html[data-theme='dark'] {
   --tt-travelled: #fbbf24;
   --tt-travelled-opacity: 0.6;
   --tt-highlight-casing: #0f172a;
+  /* Dark lines (Piccadilly, Weaver, Metropolitan) need a little more width to show on the dark map. */
+  --tt-untravelled-line-width: 2.5px;
   --tt-walked: #94a3b8;
   --tt-preview: #fb923c;
   --tt-preview-edge: #0f172a;
@@ -374,11 +382,11 @@ body:has(.app-shell[data-map-fullscreen='true']) {
     cursor: default !important;
   }
 
-  & :is(#routes, #app-travelled-routes) :is(.snorthern, .fnorthern) {
+  & :is(#routes, #app-travelled-lines) :is(.snorthern, .fnorthern) {
     stroke: #000 !important;
   }
 
-  & :is(#routes, #app-travelled-routes) .fnorthern {
+  & :is(#routes, #app-travelled-lines) .fnorthern {
     fill: #000 !important;
   }
 }
@@ -398,11 +406,11 @@ html[data-theme='dark'] .tube-map__svg {
   }
 
   /* Black is invisible on the dark map, so the Northern line is drawn light instead. */
-  & :is(#routes, #app-travelled-routes) :is(.snorthern, .sedgware) {
+  & :is(#routes, #app-travelled-lines) :is(.snorthern, .sedgware) {
     stroke: #e2e8f0 !important;
   }
 
-  & :is(#routes, #app-travelled-routes) .fnorthern {
+  & :is(#routes, #app-travelled-lines) .fnorthern {
     fill: #e2e8f0 !important;
     stroke: #e2e8f0 !important;
   }
@@ -522,23 +530,24 @@ html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
 
 /*
  * Travelled track, in one of two styles (Settings → Map), chosen by data-progress-style on the app shell:
- * - lines (default): the map's lines are drawn thinner, and a full-width copy of them (#app-travelled-routes) is
- *   revealed only along travelled track, so travelled track keeps its true colours and width;
+ * - lines (default): the map's lines and station ticks are drawn thinner, and travelled track is drawn over them,
+ *   wider and solid, in each line's own colour (#app-travelled-lines);
  * - band: a translucent yellow band beneath the lines, with a casing strip so yellow lines stay distinct from it.
  */
 .app-shell[data-progress-style='lines'] .tube-map__svg {
   & #routes .me {
-    stroke-width: 2.5px !important;
+    stroke-width: var(--tt-untravelled-line-width) !important;
   }
 
   & #routes .meb {
-    stroke-width: 3px !important;
+    stroke-width: calc(var(--tt-untravelled-line-width) + 0.5px) !important;
   }
 
-  /* White centre stripes (Overground, DLR, Elizabeth line branches) would swallow a thin line. */
+  /* Stripes and dashes drawn inside some lines (Overground, DLR, Elizabeth line, W&C) would swallow a thin line. */
   & #routes :is(.mes, .branch, .sdlr2, .swnc2) {
     display: none !important;
   }
+
 
   & #app-highlight-casing,
   & #app-travelled-sections > :not(.app-walk-link) {
@@ -552,13 +561,41 @@ html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
 }
 
 .app-shell[data-progress-style='band'] .tube-map__svg {
-  & #app-travelled-routes {
+  & #app-travelled-lines {
     display: none;
   }
 
   & #app-travelled-sections {
     opacity: var(--tt-travelled-opacity);
   }
+}
+
+.tube-map__svg :is(.app-travelled-line, .app-travelled-line-casing, .app-travelled-line-part-time) {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.tube-map__svg .app-travelled-line {
+  stroke-width: var(--tt-travelled-line-width);
+}
+
+/* The Circle and Hammersmith & City lines have a darker edge on the map, which keeps the pale colours visible. */
+.tube-map__svg .app-travelled-line-casing {
+  stroke-width: calc(var(--tt-travelled-line-width) + 0.5px);
+}
+
+/*
+ * The map's white dashes for a part-time service (the District line's Olympia branch, the Elizabeth line's rush-hour
+ * stretch), in the same proportion to the line as the map's own (3 dashes on a 5-unit line). Travelled Overground track
+ * has no white centre stripe, which would leave little of the line's colour.
+ */
+.tube-map__svg .app-travelled-line-part-time {
+  stroke: #fff;
+  stroke-linecap: butt;
+  stroke-width: calc(var(--tt-travelled-line-width) * 0.6);
+  stroke-dasharray: 4;
 }
 
 .tube-map__svg .app-travelled-section {
@@ -588,7 +625,7 @@ html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
   stroke-width: calc(var(--tt-highlight-width) * 0.75);
 }
 
-/* The selected route's new track: dashes over the lines (beneath the station markers and names). */
+/* The selected route, travelled or not: dashes over the lines (beneath the station markers and names). */
 .tube-map__svg :is(.app-route-preview-section, .app-route-preview-casing) {
   fill: none;
   stroke-linejoin: round;
@@ -619,6 +656,6 @@ html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
   stroke-width: 10px;
 }
 
-.tube-map__svg :is(#app-travelled-routes, #app-route-preview-sections) {
+.tube-map__svg :is(#app-travelled-lines, #app-route-preview-sections) {
   pointer-events: none;
 }

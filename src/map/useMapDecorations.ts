@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
-import type { Progress } from '../lib/types';
+import type { Progress, ProgressStyle, ResolvedTheme } from '../lib/types';
 import { ensureHighlightLayers, renderLinkHighlights } from './highlight-layer';
 import { addLineLabelBackgrounds } from './line-label-backgrounds';
 import { applyStationStates, getStationIndex, setStationFlag, type StationIndex } from './station-index';
+import { applyTickProgress, getUntravelledTickScale } from './station-ticks';
 
 interface MapDecorationOptions {
   viewportRef: RefObject<HTMLDivElement | null>;
   svgMarkup: string;
   progress: Progress;
   selectedStationIds: readonly string[];
-  /** Links of the selected route not yet travelled. */
+  /** Links of the selected route. */
   previewLinkIds: readonly string[];
+  progressStyle: ProgressStyle;
+  /** Untravelled line widths can differ by theme, and ticks follow them. */
+  resolvedTheme: ResolvedTheme;
 }
 
 /**
  * Keeps the inline SVG in sync with app state. Each concern updates independently so that cheap interactions
  * (hover, selection) never redo expensive work (station binding, highlight geometry).
  */
-export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedStationIds, previewLinkIds }: MapDecorationOptions) {
+export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedStationIds, previewLinkIds, progressStyle, resolvedTheme }: MapDecorationOptions) {
   const indexRef = useRef<StationIndex | null>(null);
   const appliedSelectionRef = useRef<ReadonlySet<string>>(new Set());
   const hoveredStationRef = useRef<string | null>(null);
@@ -42,6 +46,13 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
     applyStationStates(index, progress);
     renderLinkHighlights(svg, svgMarkup, 'travelled', [...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
   }, [getSvg, svgMarkup, progress]);
+
+  const travelledSectionIds = progress.travelledSegmentIDs;
+  useEffect(() => {
+    const svg = getSvg();
+    if (!svg || !indexRef.current) return;
+    applyTickProgress(svg, travelledSectionIds, progressStyle === 'lines' ? getUntravelledTickScale(svg) : null);
+  }, [getSvg, svgMarkup, travelledSectionIds, progressStyle, resolvedTheme]);
 
   useEffect(() => {
     const index = indexRef.current;

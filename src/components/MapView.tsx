@@ -33,17 +33,17 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
   /** The selection before each of the last two station clicks, so a double click can leave it unchanged. */
   const recentActivationsRef = useRef<Array<{ stationId: string; selectionBefore: readonly string[] }>>([]);
 
-  const newRouteLinkIds = useMemo(() => {
-    const recorded = new Set([...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
-    return activeRoute?.links.filter((link) => !recorded.has(link.id)).map((link) => link.id) ?? [];
-  }, [activeRoute, progress.travelledSegmentIDs, progress.walkedLinkIDs]);
+  // The whole route is shown, including track already travelled, so it can be followed end to end.
+  const routeLinkIds = useMemo(() => activeRoute?.links.map((link) => link.id) ?? [], [activeRoute]);
 
   const decorations = useMapDecorations({
     viewportRef,
     svgMarkup: markup,
     progress,
     selectedStationIds,
-    previewLinkIds: newRouteLinkIds
+    previewLinkIds: routeLinkIds,
+    progressStyle,
+    resolvedTheme
   });
 
   const { cancelInteractions, ...gestureHandlers } = useMapGestures({
@@ -132,7 +132,6 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
 
         {activeRoute && (
           <RouteActionBar
-            hasNewTrack={newRouteLinkIds.length > 0}
             selectedStationIds={selectedStationIds}
             routeOptions={selection.routeOptions}
             activeRoute={activeRoute}
