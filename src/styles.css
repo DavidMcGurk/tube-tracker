@@ -423,7 +423,7 @@ html[data-theme='dark'] .tube-map__svg {
 
 /* ---------------------------------------------------------------- Map SVG: labels */
 
-/* Dark mode: map text is light with a dark halo (line-name labels keep their colours on their white backgrounds). */
+/* Dark mode: map text is light with a dark halo (line-name labels keep their colours, outlined in white below). */
 html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .small *)) {
   fill: var(--tt-label-default) !important;
   paint-order: stroke;
@@ -476,6 +476,18 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .sm
   fill: #fff;
   stroke: none;
   pointer-events: none;
+}
+
+/* Dark mode: rather than a white background, line names get a white outline around their letters. */
+html[data-theme='dark'] .tube-map__svg .app-line-label-background {
+  display: none;
+}
+
+html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-linejoin: round;
+  stroke-width: 3px;
 }
 
 .tube-map__svg #stname > .small :is(.flioness, .flioness text, .flioness tspan) {

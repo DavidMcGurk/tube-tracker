@@ -130,6 +130,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       };
       return [style('Lioness line'), style('Liberty line'), style('Jubilee line')];
     })).toEqual(['rgb(196, 137, 38) 700', 'rgb(94, 104, 103) 700', 'rgb(119, 119, 119) 700']);
+    // Light mode puts a white background behind each name; dark mode outlines the letters in white instead.
+    const treatment = await page.evaluate(() => {
+      const label = document.querySelector('#text #stname > .small text')!;
+      const background = document.querySelector('#app-line-label-backgrounds rect')!;
+      return { background: getComputedStyle(background).display, outline: getComputedStyle(label).stroke };
+    });
+    expect(treatment).toEqual(colorScheme === 'light'
+      ? { background: 'inline', outline: 'none' }
+      : { background: 'none', outline: 'rgb(255, 255, 255)' });
   });
 }
 
