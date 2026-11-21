@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 5199;
+/** Override with E2E_PORT to run several checkouts (e.g. git worktrees) side by side. */
+const PORT = Number(process.env.E2E_PORT ?? 5199);
 
 /**
  * Viewport sweep: the app is mobile-first (iPhone home-screen PWA) but must also work on widescreen.

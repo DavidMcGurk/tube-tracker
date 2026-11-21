@@ -202,8 +202,15 @@ button:disabled {
       width: 100%;
     }
 
-    &.has-options .route-primary-action {
+    /* Stack the route summary above the actions so the summary keeps the full width. */
+    & .route-primary-action {
+      flex-direction: column;
       align-items: stretch;
+    }
+
+    & .route-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
     }
   }
 
