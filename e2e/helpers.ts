@@ -16,11 +16,23 @@ export function collectErrors(page: Page) {
   return errors;
 }
 
-export async function openMap(page: Page) {
+/**
+ * Opens the app on the map tab. By default the "Add to Home Screen" pop-up is dismissed through the app's own storage
+ * (which the app observes), so it never covers what a test taps; install-prompt tests pass `installPrompt: 'default'`.
+ */
+export async function openMap(page: Page, { installPrompt = 'dismissed' }: { installPrompt?: 'dismissed' | 'default' } = {}) {
   await page.goto('./');
+  if (installPrompt === 'dismissed') await dismissInstallPrompt(page);
   await expect(page.locator('.tube-map-viewport svg')).toBeVisible();
   // Station bindings are attached by an effect once the SVG is in the DOM.
   await expect(page.locator('#text text[data-app-station-id]').first()).toBeAttached();
+}
+
+export async function dismissInstallPrompt(page: Page) {
+  await page.evaluate(`(async () => {
+    const storage = await import('/src/lib/storage.ts');
+    await storage.updateInstallPromptState({ dismissedAt: Date.now() });
+  })()`);
 }
 
 export function stationLabel(page: Page, stationId: string) {

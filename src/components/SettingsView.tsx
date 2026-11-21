@@ -1,8 +1,16 @@
+import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import { InstallAppSection } from './InstallAppSection';
+
 function ExternalLink({ href, children }: { href: string; children: string }) {
   return <a className="underline" href={href} target="_blank" rel="noreferrer">{children}</a>;
 }
 
-export function SettingsView({ onResetRequest }: { onResetRequest: () => void }) {
+interface SettingsViewProps {
+  onResetRequest: () => void;
+  install: InstallPromptController;
+}
+
+export function SettingsView({ onResetRequest, install }: SettingsViewProps) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-10">
       <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -12,6 +20,8 @@ export function SettingsView({ onResetRequest }: { onResetRequest: () => void })
             <button onClick={onResetRequest} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
           </div>
         </div>
+
+        <InstallAppSection install={install} />
 
         <div>
           <h3 className="text-lg font-semibold">About</h3>
