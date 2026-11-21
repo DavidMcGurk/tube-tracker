@@ -10,8 +10,16 @@ export function clampMapZoom(zoom: number) {
   return Math.min(MAX_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, zoom));
 }
 
+/** Tolerance for treating a zoom as already on the step grid despite floating-point error. */
+const ZOOM_GRID_EPSILON = 1e-6;
+
+/** Steps to the next multiple of `step` in its direction, so continuous (pinched) zooms snap back onto the grid. */
 export function stepMapZoom(zoom: number, step: number) {
-  return clampMapZoom(Math.round((zoom + step) * 100) / 100);
+  const size = Math.abs(step);
+  if (size === 0) return clampMapZoom(zoom);
+  const gridIndex = zoom / size;
+  const nextIndex = step > 0 ? Math.floor(gridIndex + ZOOM_GRID_EPSILON) + 1 : Math.ceil(gridIndex - ZOOM_GRID_EPSILON) - 1;
+  return clampMapZoom(Math.round(nextIndex * size * 100) / 100);
 }
 
 export function toggleStationSelection(selectedStationIds: string[], stationId: string) {

@@ -23,6 +23,20 @@ describe('map interaction helpers', () => {
     expect(stepMapZoom(1, -0.25)).toBe(MIN_MAP_ZOOM);
     expect(stepMapZoom(5.75, 0.25)).toBe(MAX_MAP_ZOOM);
     expect(stepMapZoom(4, 0.25)).toBe(4.25);
+    expect(stepMapZoom(4, -0.25)).toBe(3.75);
+  });
+
+  it('snaps continuous (pinched) zooms onto the step grid in the step direction', () => {
+    expect(stepMapZoom(4.37, 0.25)).toBe(4.5);
+    expect(stepMapZoom(4.37, -0.25)).toBe(4.25);
+    expect(stepMapZoom(1.01, -0.25)).toBe(MIN_MAP_ZOOM);
+    expect(stepMapZoom(5.99, 0.25)).toBe(MAX_MAP_ZOOM);
+    // Values a hair off the grid from floating-point error still step a whole step.
+    expect(stepMapZoom(1.5000000000000002, 0.25)).toBe(1.75);
+    expect(stepMapZoom(1.5000000000000002, -0.25)).toBe(1.25);
+    expect(stepMapZoom(1.4999999999999998, 0.25)).toBe(1.75);
+    expect(stepMapZoom(1.4999999999999998, -0.25)).toBe(1.25);
+    expect(stepMapZoom(3, 0)).toBe(3);
   });
 
   it('toggles selected stations, supports two endpoints, and replaces both when choosing a third', () => {
