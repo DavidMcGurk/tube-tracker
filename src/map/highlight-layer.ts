@@ -23,6 +23,15 @@ const maximumTraceToDistanceRatio = 4;
 
 export const TRAVELLED_LAYER_ID = 'app-travelled-sections';
 export const PREVIEW_LAYER_ID = 'app-route-preview-sections';
+const CASING_LAYER_ID = 'app-highlight-casing';
+export const LINE_LABEL_BACKGROUND_LAYER_ID = 'app-line-label-backgrounds';
+
+export type HighlightKind = 'travelled' | 'preview';
+
+const HIGHLIGHT_LAYERS: Record<HighlightKind, { layerId: string; className: string }> = {
+  travelled: { layerId: TRAVELLED_LAYER_ID, className: 'app-travelled-section' },
+  preview: { layerId: PREVIEW_LAYER_ID, className: 'app-route-preview-section' }
+};
 
 /**
  * Geometry measured from one SVG document, in user units. It does not depend on zoom or scroll, so it is kept for the
@@ -149,41 +158,59 @@ function ensureLayer(svg: SVGSVGElement, layerId: string, before: Element) {
   return layer;
 }
 
-/** Creates the highlight layers beneath the map's route lines: route preview below travelled sections. */
+/**
+ * Creates the app's layers beneath the map's route lines, bottom to top: route preview, travelled sections, a casing
+ * strip that separates every highlight from the line drawn over it (so yellow lines stay visible on the yellow band),
+ * and the backgrounds behind line-name labels.
+ */
 export function ensureHighlightLayers(svg: SVGSVGElement) {
   const routes = svg.querySelector('#routes');
   if (!routes) return;
-  const travelled = ensureLayer(svg, TRAVELLED_LAYER_ID, routes);
+  const labelBackgrounds = ensureLayer(svg, LINE_LABEL_BACKGROUND_LAYER_ID, routes);
+  const casing = ensureLayer(svg, CASING_LAYER_ID, labelBackgrounds);
+  const travelled = ensureLayer(svg, TRAVELLED_LAYER_ID, casing);
   ensureLayer(svg, PREVIEW_LAYER_ID, travelled);
+  for (const kind of Object.keys(HIGHLIGHT_LAYERS) as HighlightKind[]) {
+    if (casing.querySelector(`[data-source="${kind}"]`)) continue;
+    const group = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+    group.setAttribute('data-source', kind);
+    casing.appendChild(group);
+  }
+}
+
+function createPath(document: Document, className: string, linkId: string, pathData: string) {
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('class', className);
+  path.setAttribute('data-app-link-id', linkId);
+  path.setAttribute('d', pathData);
+  return path;
 }
 
 /**
- * Draws the given links into a highlight layer: track sections follow the map's own line geometry, and walking
- * interchanges follow their drawn connector. `documentKey` identifies the SVG document so measured geometry can be
- * reused across re-mounts.
+ * Draws the given links as travelled or preview highlights: track sections follow the map's own line geometry (with
+ * a casing copy), and walking interchanges follow their drawn connector. `documentKey` identifies the SVG document
+ * so measured geometry can be reused across re-mounts.
  */
-export function renderLinkHighlights(
-  svg: SVGSVGElement,
-  documentKey: string,
-  layerId: string,
-  className: string,
-  linkIds: readonly string[]
-) {
+export function renderLinkHighlights(svg: SVGSVGElement, documentKey: string, kind: HighlightKind, linkIds: readonly string[]) {
+  const { layerId, className } = HIGHLIGHT_LAYERS[kind];
   const layer = svg.querySelector<SVGGElement>(`#${layerId}`);
-  if (!layer) return;
+  const casing = svg.querySelector<SVGGElement>(`#${CASING_LAYER_ID} [data-source="${kind}"]`);
+  if (!layer || !casing) return;
   layer.replaceChildren();
+  casing.replaceChildren();
   if (linkIds.length === 0) return;
 
   const geometry = getGeometry(documentKey);
   for (const linkId of new Set(linkIds)) {
     const link = network.getLink(linkId);
     if (!link) continue;
-    const pathData = link.type === 'walk' ? link.mapPath : traceSection(svg, geometry, link);
+    if (link.type === 'walk') {
+      layer.appendChild(createPath(svg.ownerDocument, `${className} app-walk-link`, link.id, link.mapPath));
+      continue;
+    }
+    const pathData = traceSection(svg, geometry, link);
     if (!pathData) continue;
-    const path = svg.ownerDocument.createElementNS(SVG_NS, 'path');
-    path.setAttribute('class', link.type === 'walk' ? `${className} app-walk-link` : className);
-    path.setAttribute('data-app-link-id', link.id);
-    path.setAttribute('d', pathData);
-    layer.appendChild(path);
+    layer.appendChild(createPath(svg.ownerDocument, className, link.id, pathData));
+    casing.appendChild(createPath(svg.ownerDocument, 'app-highlight-casing', link.id, pathData));
   }
 }

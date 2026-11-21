@@ -18,11 +18,13 @@ interface MapToolbarProps {
 
 const toolbarButton = 'min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700';
 
-function LegendSwatch({ bar, dot }: { bar: string; dot: string }) {
+/** A small picture of a highlighted line: the band, its casing strip, and the line itself. */
+function HighlightSwatch({ band, opacity }: { band: string; opacity: string }) {
   return (
-    <span className="relative inline-flex h-4 w-6 items-center" aria-hidden="true">
-      <span className={`absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded ${bar}`} />
-      <span className={`absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white dark:bg-slate-900 ${dot}`} />
+    <span className="relative inline-flex h-3 w-7 items-center" aria-hidden="true">
+      <span className={`absolute inset-0 rounded-full ${band} ${opacity}`} />
+      <span className="absolute inset-x-0.5 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-(--tt-highlight-casing)" />
+      <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-slate-700 dark:bg-slate-200" />
     </span>
   );
 }
@@ -56,12 +58,12 @@ export function MapToolbar(props: MapToolbarProps) {
         <ThemeToggleButton className="fullscreen-theme-control" resolvedTheme={props.resolvedTheme} onToggle={props.onToggleTheme} />
         <div className="map-legend flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-2" aria-label="Yellow highlights show travelled track">
-            <LegendSwatch bar="bg-yellow-400 dark:bg-yellow-300" dot="border-yellow-500 dark:border-yellow-300" />
+            <HighlightSwatch band="bg-(--tt-travelled)" opacity="opacity-(--tt-travelled-opacity)" />
             Travelled
           </span>
           {props.showNewRouteLegend && (
             <span className="inline-flex items-center gap-2" aria-label="Orange highlights show new track in the selected route">
-              <LegendSwatch bar="bg-orange-500 dark:bg-orange-400" dot="border-orange-600 dark:border-orange-400" />
+              <HighlightSwatch band="bg-(--tt-preview)" opacity="opacity-(--tt-preview-opacity)" />
               New route
             </span>
           )}

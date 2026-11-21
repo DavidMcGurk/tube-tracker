@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { Progress } from '../lib/types';
-import { ensureHighlightLayers, PREVIEW_LAYER_ID, renderLinkHighlights, TRAVELLED_LAYER_ID } from './highlight-layer';
+import { ensureHighlightLayers, renderLinkHighlights } from './highlight-layer';
+import { addLineLabelBackgrounds } from './line-label-backgrounds';
 import { applyStationStates, getStationIndex, setStationFlag, type StationIndex } from './station-index';
 
 interface MapDecorationOptions {
@@ -28,7 +29,10 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
     indexRef.current = svg && svgMarkup ? getStationIndex(svg) : null;
     appliedSelectionRef.current = new Set();
     hoveredStationRef.current = null;
-    if (svg && svgMarkup) ensureHighlightLayers(svg);
+    if (svg && svgMarkup) {
+      ensureHighlightLayers(svg);
+      addLineLabelBackgrounds(svg);
+    }
   }, [getSvg, svgMarkup]);
 
   useEffect(() => {
@@ -36,7 +40,7 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
     const index = indexRef.current;
     if (!svg || !index) return;
     applyStationStates(index, progress);
-    renderLinkHighlights(svg, svgMarkup, TRAVELLED_LAYER_ID, 'app-travelled-section', [...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
+    renderLinkHighlights(svg, svgMarkup, 'travelled', [...progress.travelledSegmentIDs, ...progress.walkedLinkIDs]);
   }, [getSvg, svgMarkup, progress]);
 
   useEffect(() => {
@@ -56,7 +60,7 @@ export function useMapDecorations({ viewportRef, svgMarkup, progress, selectedSt
   useEffect(() => {
     const svg = getSvg();
     if (!svg || !indexRef.current) return;
-    renderLinkHighlights(svg, svgMarkup, PREVIEW_LAYER_ID, 'app-route-preview-section', previewKey ? previewKey.split('|') : []);
+    renderLinkHighlights(svg, svgMarkup, 'preview', previewKey ? previewKey.split('|') : []);
   }, [getSvg, svgMarkup, previewKey]);
 
   /** Imperative so that pointer movement never re-renders React. */

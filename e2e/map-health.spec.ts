@@ -99,3 +99,36 @@ test('recorded walks are highlighted as walks', async ({ page }) => {
   await openMap(page);
   await expect(page.locator('#app-travelled-sections path.app-walk-link')).toHaveCount(2);
 });
+
+test('travelled track gets a casing strip so lines stay visible on the highlight', async ({ page }) => {
+  await openMap(page);
+  await seedTravelledSections(page, "section.lineId === 'circle' || section.lineId === 'lioness'");
+  await page.reload();
+  await openMap(page);
+  const travelled = page.locator('#app-travelled-sections path');
+  await expect(travelled.first()).toBeAttached();
+  const travelledCount = await travelled.count();
+  await expect(page.locator('#app-highlight-casing [data-source="travelled"] path')).toHaveCount(travelledCount);
+  const layerOrder = await page.evaluate(() => [...document.querySelector('#routes')!.parentElement!.children]
+    .map((element) => element.id)
+    .filter((id) => ['app-route-preview-sections', 'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes'].includes(id)));
+  expect(layerOrder).toEqual(['app-route-preview-sections', 'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes']);
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`line-name labels have backgrounds and legible line colours (${colorScheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme });
+    await openMap(page);
+    const labelCount = await page.locator('#text #stname > .small text').count();
+    expect(labelCount).toBeGreaterThan(50);
+    await expect(page.locator('#app-line-label-backgrounds rect')).toHaveCount(labelCount);
+    await expect.poll(() => page.evaluate(() => {
+      const style = (text: string) => {
+        const label = [...document.querySelectorAll('#text #stname > .small text')].find((element) => element.textContent === text)!;
+        const computed = getComputedStyle(label);
+        return `${computed.fill} ${computed.fontWeight}`;
+      };
+      return [style('Lioness line'), style('Liberty line'), style('Jubilee line')];
+    })).toEqual(['rgb(196, 137, 38) 700', 'rgb(94, 104, 103) 700', 'rgb(119, 119, 119) 700']);
+  });
+}

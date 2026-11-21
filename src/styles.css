@@ -18,10 +18,13 @@
 
   /* Highlight layers drawn beneath the map's lines. */
   --tt-travelled: #facc15;
-  --tt-travelled-opacity: 0.95;
+  --tt-travelled-opacity: 0.5;
   --tt-preview: #f97316;
-  --tt-preview-opacity: 0.88;
-  --tt-highlight-width: 16px;
+  --tt-preview-opacity: 0.7;
+  --tt-highlight-width: 18px;
+  /* A strip between each highlight and its line, so yellow lines (Circle, Lioness) stay distinct from the band. */
+  --tt-highlight-casing: #fff;
+  --tt-highlight-casing-width: 9px;
 
   /*
    * Stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you changed.
@@ -41,7 +44,10 @@
 html[data-theme='dark'] {
   color-scheme: dark;
   --tt-travelled: #fbbf24;
+  --tt-travelled-opacity: 0.6;
   --tt-preview: #fb923c;
+  --tt-preview-opacity: 0.75;
+  --tt-highlight-casing: #0f172a;
   --tt-station-entered: #4ade80;
   --tt-station-changed: #fbbf24;
   --tt-label-default: #fff;
@@ -367,8 +373,8 @@ html[data-theme='dark'] .tube-map__svg {
 
 /* ---------------------------------------------------------------- Map SVG: labels */
 
-/* Dark mode: all map text is light with a dark halo. */
-html[data-theme='dark'] .tube-map__svg :is(text, tspan) {
+/* Dark mode: map text is light with a dark halo (line-name labels keep their colours on their white backgrounds). */
+html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .small *)) {
   fill: var(--tt-label-default) !important;
   paint-order: stroke;
   stroke: var(--tt-label-halo);
@@ -376,8 +382,8 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan) {
   stroke-width: 2px;
 }
 
-/* Station names are drawn at a regular weight; selection makes them bold. */
-.tube-map__svg #stname :is(text, tspan) {
+/* Station names are drawn at a regular weight; selection makes them bold. Line-name labels stay bold. */
+.tube-map__svg #stname :is(text, tspan):where(:not(.small *)) {
   font-weight: 400 !important;
   text-decoration: none !important;
 }
@@ -412,16 +418,30 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan) {
   font-weight: 700 !important;
 }
 
-/* Yellow and orange line-name labels are illegible on white, so they are drawn near-black (with a light halo in dark mode). */
-.tube-map__svg #text :is(.fcircle, .flioness),
-.tube-map__svg #text :is(.fcircle, .flioness) :is(text, tspan) {
-  fill: #111 !important;
+/*
+ * Line-name labels sit on white backgrounds and use their line's colour; the four lightest colours are darkened
+ * just enough to reach 3:1 contrast on white while keeping their hue.
+ */
+.tube-map__svg .app-line-label-background {
+  fill: #fff;
+  stroke: none;
+  pointer-events: none;
 }
 
-html[data-theme='dark'] .tube-map__svg #text :is(.fcircle, .flioness),
-html[data-theme='dark'] .tube-map__svg #text :is(.fcircle, .flioness) :is(text, tspan) {
-  stroke: #fff;
-  stroke-width: 2.5px;
+.tube-map__svg #stname > .small :is(.flioness, .flioness text, .flioness tspan) {
+  fill: #c48926 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fcircle, .fcircle text, .fcircle tspan) {
+  fill: #c58800 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fwnc, .fwnc text, .fwnc tspan) {
+  fill: #4aa385 !important;
+}
+
+.tube-map__svg #stname > .small :is(.fsuffragette, .fsuffragette text, .fsuffragette tspan) {
+  fill: #40a76d !important;
 }
 
 /* ---------------------------------------------------------------- Map SVG: station markers and highlights */
@@ -452,6 +472,15 @@ html[data-theme='dark'] .tube-map__svg #text :is(.fcircle, .flioness) :is(text, 
 
 .tube-map__svg .app-travelled-section {
   stroke: var(--tt-travelled);
+}
+
+.tube-map__svg .app-highlight-casing {
+  fill: none;
+  stroke: var(--tt-highlight-casing);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--tt-highlight-casing-width);
+  pointer-events: none;
 }
 
 .tube-map__svg .app-route-preview-section {
