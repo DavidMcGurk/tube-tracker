@@ -2,14 +2,16 @@ import type { RouteResult } from '../lib/types';
 import { Station, type StationRecord } from './station';
 import { TrackSection, type TrackSectionRecord } from './track-section';
 
-interface NetworkRoute extends RouteResult {
-  segments: TrackSection[];
-}
+type NetworkRoute = RouteResult & { sections: TrackSection[] };
+
+const routeKey = (route: RouteResult) => route.sections.map((section) => section.id).join('|');
+const routeDistance = (route: RouteResult) => route.sections.reduce((sum, section) => sum + section.distance, 0);
 
 export class TransitNetwork {
   readonly stations: readonly Station[];
   readonly sections: readonly TrackSection[];
   private readonly stationById: ReadonlyMap<string, Station>;
+  private readonly sectionById: ReadonlyMap<string, TrackSection>;
 
   constructor(stationRecords: readonly StationRecord[], sectionRecords: readonly TrackSectionRecord[]) {
     const stationById = new Map<string, Station>();
@@ -39,12 +41,17 @@ export class TransitNetwork {
     });
 
     this.stationById = stationById;
+    this.sectionById = new Map(sections.map((section) => [section.id, section]));
     this.stations = Object.freeze([...stationById.values()]);
     this.sections = Object.freeze(sections);
   }
 
   getStation(stationId: string) {
     return this.stationById.get(stationId);
+  }
+
+  getSection(sectionId: string) {
+    return this.sectionById.get(sectionId);
   }
 
   findRoute(startStationId: string, endStationId: string): RouteResult | null {
@@ -62,7 +69,7 @@ export class TransitNetwork {
     const start = this.stationById.get(startStationId);
     if (!start || !this.stationById.has(endStationId)) return [];
     if (startStationId === endStationId) {
-      return [{ path: [startStationId], segments: [], transferStations: [] }];
+      return [{ path: [startStationId], sections: [], transferStations: [] }];
     }
 
     const firstRoute = this.findShortestPath(startStationId, endStationId);
@@ -70,8 +77,7 @@ export class TransitNetwork {
 
     const routes: NetworkRoute[] = [firstRoute];
     const candidates = new Map<string, NetworkRoute>();
-    const distanceOf = (route: RouteResult) => route.segments.reduce((sum, section) => sum + section.distance, 0);
-    const maxDistance = distanceOf(firstRoute) * maxDistanceRatio;
+    const maxDistance = routeDistance(firstRoute) * maxDistanceRatio;
     const maxTransfers = firstRoute.transferStations.length + 1;
 
     for (let routeIndex = 1; routeIndex < maxRoutes; routeIndex += 1) {
@@ -80,13 +86,13 @@ export class TransitNetwork {
 
       for (let spurIndex = 0; spurIndex < previousRoute.path.length - 1; spurIndex += 1) {
         const rootPath = previousRoute.path.slice(0, spurIndex + 1);
-        const rootSections = previousRoute.segments.slice(0, spurIndex);
+        const rootSections = previousRoute.sections.slice(0, spurIndex);
         const bannedSectionIds = new Set<string>();
 
         for (const route of routes) {
-          const sharesRoot = rootSections.every((section, index) => route.segments[index]?.id === section.id);
+          const sharesRoot = rootSections.every((section, index) => route.sections[index]?.id === section.id);
           if (sharesRoot) {
-            const nextSection = route.segments[spurIndex];
+            const nextSection = route.sections[spurIndex];
             if (nextSection) bannedSectionIds.add(nextSection.id);
           }
         }
@@ -102,21 +108,21 @@ export class TransitNetwork {
 
         const candidate = this.createRoute(
           [...rootPath.slice(0, -1), ...spurRoute.path],
-          [...rootSections, ...spurRoute.segments]
+          [...rootSections, ...spurRoute.sections]
         );
-        if (distanceOf(candidate) > maxDistance || candidate.transferStations.length > maxTransfers) continue;
+        if (routeDistance(candidate) > maxDistance || candidate.transferStations.length > maxTransfers) continue;
 
-        const key = candidate.segments.map((section) => section.id).join('|');
-        if (!routes.some((route) => route.segments.map((section) => section.id).join('|') === key)) {
+        const key = routeKey(candidate);
+        if (!routes.some((route) => routeKey(route) === key)) {
           candidates.set(key, candidate);
         }
       }
 
-      const next = [...candidates.entries()].sort(([, a], [, b]) =>
-        distanceOf(a) - distanceOf(b)
+      const next = [...candidates.entries()].sort(([keyA, a], [keyB, b]) =>
+        routeDistance(a) - routeDistance(b)
         || a.transferStations.length - b.transferStations.length
-        || a.segments.length - b.segments.length
-        || a.segments.map((section) => section.id).join('|').localeCompare(b.segments.map((section) => section.id).join('|'))
+        || a.sections.length - b.sections.length
+        || keyA.localeCompare(keyB)
       )[0];
       if (!next) break;
       candidates.delete(next[0]);
@@ -228,6 +234,6 @@ export class TransitNetwork {
         transferStations.push(path[index]!);
       }
     }
-    return { path, segments: sections, transferStations };
+    return { path, sections, transferStations };
   }
 }

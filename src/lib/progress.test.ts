@@ -8,7 +8,7 @@ describe('Tube Tracker logic', () => {
     expect(route).not.toBeNull();
     expect(route?.path[0]).toBe('paddington');
     expect(route?.path.at(-1)).toBe('waterloo');
-    expect(route?.segments.length).toBeGreaterThan(0);
+    expect(route?.sections.length).toBeGreaterThan(0);
   });
 
   it('ignores duplicate section additions', () => {
@@ -65,6 +65,14 @@ describe('Tube Tracker logic', () => {
       expect(line.completion).toBeGreaterThanOrEqual(0);
       expect(line.completion).toBeLessThanOrEqual(100);
     }
+  });
+
+  it('returns the same progress object when a route adds nothing new', () => {
+    const route = findRoute('paddington', 'waterloo')!;
+    const progress = addRouteToProgress(EMPTY_PROGRESS, route, 'paddington', 'waterloo');
+    expect(progress).not.toBe(EMPTY_PROGRESS);
+    expect(addRouteToProgress(progress, route, 'paddington', 'waterloo')).toBe(progress);
+    expect(addRouteToProgress(progress, route, 'waterloo', 'paddington')).toBe(progress);
   });
 
   it('reports stations untouched by any recorded journey as neutral', () => {

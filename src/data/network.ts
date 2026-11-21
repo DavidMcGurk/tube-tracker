@@ -1,10 +1,7 @@
 import type { LineDefinition } from '../lib/types';
-import { Station } from './station';
-import { TrackSection } from './track-section';
+import type { TrackSectionRecord } from './track-section';
 import { TransitNetwork } from './transit-network';
 import { tflSectionRows, tflStationRows } from './tfl-network-data';
-
-export const networkDataVersion = '2026.2';
 
 export const lines: LineDefinition[] = [
   { id: 'bakerloo', name: 'Bakerloo', color: '#b36305', system: 'Underground' },
@@ -28,20 +25,14 @@ export const lines: LineDefinition[] = [
   { id: 'elizabeth', name: 'Elizabeth line', color: '#6950a1', system: 'Elizabeth line' }
 ];
 
-const sectionRecords = [
-  ...tflSectionRows.map(([id, lineId, from, to, distance]) => ({
-    id,
-    lineId,
-    from,
-    to,
-    distance
-  })),
+const sectionRecords: TrackSectionRecord[] = [
+  ...tflSectionRows.map(([id, lineId, from, to, distance]) => ({ id, lineId, from, to, distance })),
   { id: 'bank_monument_interchange', lineId: 'interchange', from: 'bank', to: 'monument', distance: 332 }
 ];
 
 export const network = new TransitNetwork(
-  tflStationRows.map(([id, name, system, lineIds]) => new Station({ id, name, system, lines: lineIds })),
-  sectionRecords.map((record) => new TrackSection(record))
+  tflStationRows.map(([id, name, system, lineIds]) => ({ id, name, system, lines: lineIds })),
+  sectionRecords
 );
 
 export const stations = network.stations;
@@ -57,4 +48,8 @@ export function findRoutes(startStationId: string, endStationId: string, maxRout
 
 export function getStationById(stationId: string) {
   return network.getStation(stationId);
+}
+
+export function getSectionById(sectionId: string) {
+  return network.getSection(sectionId);
 }

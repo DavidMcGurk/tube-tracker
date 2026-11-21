@@ -22,10 +22,6 @@ export class Station {
     this.system = record.system;
   }
 
-  hasLine(lineId: string) {
-    return this.lines.includes(lineId);
-  }
-
   connect(section: TrackSection) {
     if (section.from !== this.id && section.to !== this.id) {
       throw new Error(`Section "${section.id}" does not connect to station "${this.id}"`);

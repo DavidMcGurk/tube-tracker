@@ -9,22 +9,20 @@ import {
   DEFAULT_MAP_ZOOM,
   DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
-  getActiveRoute,
   getRouteKey,
-  hasAlternativeRoutes,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
   normalizeStationLabel,
   stepMapZoom,
   toggleStationSelection
 } from './lib/map-interactions';
-import type { Progress, RouteResult } from './lib/types';
+import type { Progress, ResolvedTheme, RouteResult, Theme } from './lib/types';
 import referenceMapUrl from './assets/reference-map-clean.svg?url';
 
 const lineLookup = Object.fromEntries(lines.map((line) => [line.id, line]));
 const interchangeName = 'Bank–Monument interchange';
 function getRouteLineNames(route: RouteResult) {
-  const lineIds = route.segments.reduce<string[]>((result, section) => {
+  const lineIds = route.sections.reduce<string[]>((result, section) => {
     if (result.at(-1) !== section.lineId) result.push(section.lineId);
     return result;
   }, []);
@@ -168,7 +166,7 @@ function getMarkerStation(marker: SVGElement) {
 }
 
 function getClosestStationId(label: SVGTextElement, candidates: typeof stations, markers: SVGElement[]) {
-  if (candidates.length === 1) return candidates[0].id;
+  if (candidates.length === 1) return candidates[0]?.id;
 
   const labelBounds = label.getBoundingClientRect();
   const labelX = labelBounds.left + labelBounds.width / 2;
@@ -192,7 +190,7 @@ function getClosestStationId(label: SVGTextElement, candidates: typeof stations,
   return closestStationId;
 }
 
-function ThemeIcon({ resolvedTheme }: { resolvedTheme: 'light' | 'dark' }) {
+function ThemeIcon({ resolvedTheme }: { resolvedTheme: ResolvedTheme }) {
   return resolvedTheme === 'dark' ? (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mx-auto h-5 w-5">
       <circle cx="12" cy="12" r="4" />
@@ -409,8 +407,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabName>('map');
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
   const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<Theme>('system');
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light');
   const [savedMapView] = useState(readMapViewState);
   const isMobileViewport = window.matchMedia('(max-width: 640px)').matches;
   const initialMapZoom = savedMapView?.zoom
@@ -671,10 +669,10 @@ function App() {
     if (!startId || !endId) return [];
     return findRoutes(startId, endId, routeChooserOpen ? 30 : 2);
   }, [routeChooserOpen, selectedStationIds]);
-  const activeRoute = getActiveRoute(selectedRoute, routePreview);
+  const activeRoute = selectedRoute ?? routePreview;
   const completedSectionIds = useMemo(() => new Set(progress.travelledSegmentIDs), [progress.travelledSegmentIDs]);
   const newRouteSections = useMemo(
-    () => activeRoute?.segments.filter((section) => !completedSectionIds.has(section.id)) ?? [],
+    () => activeRoute?.sections.filter((section) => !completedSectionIds.has(section.id)) ?? [],
     [activeRoute, completedSectionIds]
   );
   useEffect(() => {
@@ -702,10 +700,10 @@ function App() {
   );
 
   const commitRoute = async (route: RouteResult) => {
-    if (selectedStationIds.length < 2) return;
     const [startId, endId] = selectedStationIds;
+    if (!startId || !endId) return;
     const nextProgress = addRouteToProgress(progress, route, startId, endId);
-    if (JSON.stringify(progress) === JSON.stringify(nextProgress)) {
+    if (nextProgress === progress) {
       setRouteChooserOpen(false);
       return;
     }
@@ -1087,10 +1085,10 @@ function App() {
                     {routeOptions.map((route, index) => {
                       const lineNames = getRouteLineNames(route);
                       const transferNames = getRouteTransferNames(route);
-                      const distance = route.segments.reduce((total, section) => total + section.distance, 0);
+                      const distance = route.sections.reduce((total, section) => total + section.distance, 0);
                       return (
                         <button
-                          key={route.segments.map((section) => section.id).join('|')}
+                          key={route.sections.map((section) => section.id).join('|')}
                           aria-pressed={getRouteKey(route) === getRouteKey(activeRoute ?? routePreview)}
                           className={`min-h-14 w-full rounded-xl border px-3 py-2 text-left text-sm dark:border-slate-600 ${getRouteKey(route) === getRouteKey(activeRoute ?? routePreview) ? 'border-blue-600 bg-blue-50 dark:bg-blue-950' : 'border-slate-300'}`}
                           onClick={() => setSelectedRoute(route)}
@@ -1109,7 +1107,7 @@ function App() {
                     })}
                   </div>
                 )}
-                {hasAlternativeRoutes(routeOptions) && (
+                {routeOptions.length > 1 && (
                   <button
                     className="route-alternatives-toggle min-h-11 w-full rounded-full border border-slate-300 px-4 py-2 text-sm dark:border-slate-600"
                     onClick={() => setRouteChooserOpen((open) => !open)}

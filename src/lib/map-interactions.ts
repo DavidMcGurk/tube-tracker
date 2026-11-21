@@ -1,4 +1,5 @@
-import type { RouteResult, Station } from './types';
+import type { Station } from '../data/station';
+import type { RouteResult } from './types';
 
 export const MIN_MAP_ZOOM = 1;
 export const DEFAULT_MAP_ZOOM = 4;
@@ -23,24 +24,8 @@ export function toggleStationSelection(selectedStationIds: string[], stationId: 
   return [...selectedStationIds, stationId];
 }
 
-export function hasAlternativeRoutes(routes: readonly RouteResult[]) {
-  return routes.length > 1;
-}
-
-export function getRouteStationIds(route: RouteResult | null, completedSectionIds: readonly string[] = []) {
-  if (!route) return new Set<string>();
-  const completed = new Set(completedSectionIds);
-  return new Set(route.segments
-    .filter((section) => !completed.has(section.id))
-    .flatMap((section) => [section.from, section.to]));
-}
-
-export function getActiveRoute(selectedRoute: RouteResult | null, shortestRoute: RouteResult | null) {
-  return selectedRoute ?? shortestRoute;
-}
-
 export function getRouteKey(route: RouteResult) {
-  return route.segments.map((section) => section.id).join('|');
+  return route.sections.map((section) => section.id).join('|');
 }
 
 export function formatRouteEndpoints(startStationName?: string, endStationName?: string) {

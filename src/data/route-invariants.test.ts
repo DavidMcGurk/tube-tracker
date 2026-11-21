@@ -25,8 +25,8 @@ const sectionIds = new Set(sections.map((section) => section.id));
 function expectWellFormed(route: RouteResult, start: string, end: string) {
   expect(route.path[0]).toBe(start);
   expect(route.path.at(-1)).toBe(end);
-  expect(route.path).toHaveLength(route.segments.length + 1);
-  route.segments.forEach((section, index) => {
+  expect(route.path).toHaveLength(route.sections.length + 1);
+  route.sections.forEach((section, index) => {
     const a = route.path[index];
     const b = route.path[index + 1];
     expect(sectionIds.has(section.id)).toBe(true);
@@ -49,7 +49,7 @@ describe('route invariants', () => {
     expect(routes.length).toBeGreaterThan(0);
     for (const route of routes) expectWellFormed(route, start, end);
 
-    const keys = routes.map((route) => route.segments.map((section) => section.id).join('|'));
+    const keys = routes.map((route) => route.sections.map((section) => section.id).join('|'));
     expect(new Set(keys).size).toBe(keys.length);
   });
 

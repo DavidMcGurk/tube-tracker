@@ -68,14 +68,14 @@ describe('TfL network graph', () => {
     );
 
     const routes = sample.findRoutes('a', 'd');
-    expect(routes.map((route) => route.segments.map((section) => section.id))).toEqual([
+    expect(routes.map((route) => route.sections.map((section) => section.id))).toEqual([
       ['ab', 'bd'],
       ['ac', 'cd']
     ]);
     expect(routes[0]?.transferStations).toEqual([]);
-    expect(sample.findRoute('a', 'd')?.segments.map((section) => section.id)).toEqual(['ab', 'bd']);
+    expect(sample.findRoute('a', 'd')?.sections.map((section) => section.id)).toEqual(['ab', 'bd']);
     expect(sample.findRoutes('a', 'd', 1)).toHaveLength(1);
-    expect(sample.findRoutes('a', 'd', 30).map((route) => route.segments.map((section) => section.id))).toEqual([
+    expect(sample.findRoutes('a', 'd', 30).map((route) => route.sections.map((section) => section.id))).toEqual([
       ['ab', 'bd'],
       ['ac', 'cd']
     ]);
@@ -102,7 +102,7 @@ describe('TfL network graph', () => {
       ]
     );
 
-    expect(sample.findRoutes('a', 'd', 30).map((route) => route.segments.map((section) => section.id))).toEqual([
+    expect(sample.findRoutes('a', 'd', 30).map((route) => route.sections.map((section) => section.id))).toEqual([
       ['ab', 'bd']
     ]);
   });
@@ -123,7 +123,7 @@ describe('TfL network graph', () => {
       ]
     );
 
-    expect(sample.findRoute('a', 'd')?.segments.map((section) => section.id)).toEqual(['ab', 'bd']);
+    expect(sample.findRoute('a', 'd')?.sections.map((section) => section.id)).toEqual(['ab', 'bd']);
     expect(sample.findRoute('a', 'd')?.transferStations).toEqual([]);
   });
 
@@ -144,7 +144,7 @@ describe('TfL network graph', () => {
     const route = sample.findRoute('a', 'd');
 
     expect(route?.path).toEqual(['a', 'b', 'c', 'd']);
-    expect(route?.segments.map((section, index) => [section.from, section.to])).toEqual([
+    expect(route?.sections.map((section) => [section.from, section.to])).toEqual([
       ['a', 'b'],
       ['b', 'c'],
       ['c', 'd']
@@ -177,7 +177,7 @@ describe('TfL network graph', () => {
     }
 
     const visited = new Set<string>();
-    const queue = [stations[0].id];
+    const queue = [stations[0]!.id];
     while (queue.length > 0) {
       const current = queue.shift();
       if (!current || visited.has(current)) continue;
@@ -198,26 +198,26 @@ describe('TfL network graph', () => {
       ['Stratford', 'Woolwich Arsenal'],
       ['Harrow & Wealdstone', 'Elephant & Castle'],
       ['Bank', 'Monument']
-    ]) {
+    ] as const) {
       const start = stationId(from);
       const end = stationId(to);
       const route = findRoute(start, end);
       expect(route, `Expected a route from ${from} to ${to}`).not.toBeNull();
       expect(route?.path[0]).toBe(start);
       expect(route?.path.at(-1)).toBe(end);
-      expect(route?.path).toHaveLength((route?.segments.length ?? 0) + 1);
-      expect(route?.segments.every((section, index) =>
+      expect(route?.path).toHaveLength((route?.sections.length ?? 0) + 1);
+      expect(route?.sections.every((section, index) =>
         section.from === route.path[index] && section.to === route.path[index + 1]
         || section.to === route.path[index] && section.from === route.path[index + 1]
       )).toBe(true);
     }
 
-    expect(findRoute(stationId('Bank'), stationId('Monument'))?.segments[0]?.lineId).toBe('interchange');
+    expect(findRoute(stationId('Bank'), stationId('Monument'))?.sections[0]?.lineId).toBe('interchange');
   });
 
   it('handles same-station and unknown-station route requests safely', () => {
     const sameStation = network.findRoutes('bank', 'bank');
-    expect(sameStation).toEqual([{ path: ['bank'], segments: [], transferStations: [] }]);
+    expect(sameStation).toEqual([{ path: ['bank'], sections: [], transferStations: [] }]);
     expect(network.findRoute('unknown', 'bank')).toBeNull();
     expect(network.findRoutes('bank', 'unknown')).toEqual([]);
   });

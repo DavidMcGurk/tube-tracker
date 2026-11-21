@@ -1,20 +1,22 @@
 import Dexie, { type Table } from 'dexie';
 import { EMPTY_PROGRESS } from './progress';
-import type { Progress } from './types';
+import type { Progress, Theme } from './types';
 
 interface ProgressRecord {
   id: 'current';
   value: Progress;
 }
 
-interface SettingRecord {
+interface ThemeSettingRecord {
   id: 'theme';
-  value: 'light' | 'dark' | 'system';
+  value: Theme;
 }
 
+type SettingRecord = ThemeSettingRecord;
+
 class TubeTrackerDB extends Dexie {
-  progress!: Table<ProgressRecord, 'id'>;
-  settings!: Table<SettingRecord, 'id'>;
+  progress!: Table<ProgressRecord, ProgressRecord['id']>;
+  settings!: Table<SettingRecord, SettingRecord['id']>;
 
   constructor() {
     super('tube-tracker-db');
@@ -25,22 +27,22 @@ class TubeTrackerDB extends Dexie {
   }
 }
 
-export const db = new TubeTrackerDB();
+const db = new TubeTrackerDB();
 
-export async function loadProgress() {
-  const record = await (db.progress as any).get('current');
+export async function loadProgress(): Promise<Progress> {
+  const record = await db.progress.get('current');
   return record?.value ?? EMPTY_PROGRESS;
 }
 
 export async function saveProgress(progress: Progress) {
-  await (db.progress as any).put({ id: 'current', value: progress });
+  await db.progress.put({ id: 'current', value: progress });
 }
 
-export async function loadTheme() {
-  const record = await (db.settings as any).get('theme');
+export async function loadTheme(): Promise<Theme> {
+  const record = await db.settings.get('theme');
   return record?.value ?? 'system';
 }
 
-export async function saveTheme(theme: 'light' | 'dark' | 'system') {
-  await (db.settings as any).put({ id: 'theme', value: theme });
+export async function saveTheme(theme: Theme) {
+  await db.settings.put({ id: 'theme', value: theme });
 }
