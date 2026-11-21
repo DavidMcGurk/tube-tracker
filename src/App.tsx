@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { findRoutes, getStationById, lines, sections, stations } from './data/network';
+import { findRoutes, getStationById, lines } from './data/network';
 import { addRouteToProgress, EMPTY_PROGRESS, getStationState, routeIsAlreadyComplete, summariseProgress } from './lib/progress';
 import { loadProgress, loadTheme, saveProgress, saveTheme } from './lib/storage';
 import { getScrollPositionToCenterBounds } from './lib/map-view';
 import {
   clampMapZoom,
-  createStationLabelIndex,
   DEFAULT_MAP_ZOOM,
   DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
@@ -18,6 +17,8 @@ import {
 } from './lib/map-interactions';
 import type { Progress, ResolvedTheme, RouteResult, Theme } from './lib/types';
 import referenceMapUrl from './assets/reference-map-clean.svg?url';
+import { updateSectionHighlightLayer } from './map/highlight-layer';
+import { getClosestStationId, getMarkerStation, stationsByMapLabel } from './map/station-binding';
 
 const lineLookup = Object.fromEntries(lines.map((line) => [line.id, line]));
 const interchangeName = 'Bank–Monument interchange';
@@ -32,25 +33,6 @@ function getRouteLineNames(route: RouteResult) {
 function getRouteTransferNames(route: RouteResult) {
   return route.transferStations.map((stationId) => getStationById(stationId)?.name ?? stationId);
 }
-
-const stationsByMapLabel = createStationLabelIndex(stations);
-const stationMarkerLabelEntries = [...stationsByMapLabel.entries()].sort(([a], [b]) => b.length - a.length);
-const stationMarkerAliases: Record<string, string> = {
-  bankmonument: 'bank',
-  heathrow4: 'heathrowterminal4',
-  heathrow23: 'heathrowterminals23',
-  heathrow5: 'heathrowterminal5'
-};
-const stationMarkerLineSuffixes = [
-  ...new Map(lines.flatMap((line) => [
-    [normalizeStationLabel(line.id), line.id],
-    [normalizeStationLabel(line.name), line.id]
-  ])).entries()
-].sort(([a], [b]) => b.length - a.length);
-const stationMarkerSuffixes = [
-  'elizabethbase', 'deepbase', 'overground', 'surface', 'deep', 'tube', 'base', 'mid', 'top', 'nr', 'cr', 'osi', 'hnc'
-].sort((a, b) => b.length - a.length);
-const stationMarkerSuffixLineAliases: Record<string, string> = { hnc: 'hammersmith_city' };
 
 type TabName = 'map' | 'stats' | 'settings';
 interface MapViewState {
@@ -97,99 +79,6 @@ function readMapViewState(): MapViewState | null {
   return null;
 }
 
-function getMarkerSuffixLineIds(suffix: string) {
-  const lineIds: string[] = [];
-  let remaining = suffix;
-
-  while (remaining) {
-    const lineSuffix = stationMarkerLineSuffixes.find(([value]) => remaining.startsWith(value));
-    if (lineSuffix) {
-      lineIds.push(lineSuffix[1]);
-      remaining = remaining.slice(lineSuffix[0].length);
-      continue;
-    }
-
-    const otherSuffix = stationMarkerSuffixes.find((value) => remaining.startsWith(value));
-    if (!otherSuffix) return null;
-    const aliasedLineId = stationMarkerSuffixLineAliases[otherSuffix];
-    if (aliasedLineId) lineIds.push(aliasedLineId);
-    remaining = remaining.slice(otherSuffix.length);
-  }
-
-  return lineIds;
-}
-
-function getMarkerStation(marker: SVGElement) {
-  const normalizedId = normalizeStationLabel(marker.id);
-  const exactName = stationMarkerAliases[normalizedId] ?? normalizedId;
-  const exactCandidates = stationsByMapLabel.get(exactName) ?? [];
-  if (exactCandidates.length === 1) return exactCandidates[0];
-
-  const href = marker.getAttribute('href')
-    ?? marker.getAttributeNS('http://www.w3.org/1999/xlink', 'href')
-    ?? '';
-  const symbolName = normalizeStationLabel(href.replace(/^#/, '').replace(/^st/, ''));
-  const symbolLineId = lines.find((line) =>
-    symbolName.endsWith(normalizeStationLabel(line.id))
-    || symbolName.endsWith(normalizeStationLabel(line.name))
-  )?.id;
-  const matchingLabel = stationMarkerLabelEntries.find(([label]) => normalizedId.startsWith(label));
-  if (matchingLabel) {
-    const suffixLineIds = getMarkerSuffixLineIds(normalizedId.slice(matchingLabel[0].length));
-    if (suffixLineIds) {
-      const requiredLineIds = symbolLineId ? [...suffixLineIds, symbolLineId] : suffixLineIds;
-      return matchingLabel[1].find((station) =>
-        requiredLineIds.every((lineId) => station.lines.includes(lineId))
-      );
-    }
-  }
-
-  for (const [suffix, lineId] of stationMarkerLineSuffixes) {
-    if (!normalizedId.endsWith(suffix)) continue;
-    const markerName = normalizedId.slice(0, -suffix.length);
-    const aliasName = stationMarkerAliases[markerName];
-    if (!aliasName) continue;
-    const candidates = stationsByMapLabel.get(aliasName) ?? [];
-    if (candidates.length === 1) return candidates[0];
-    return candidates.find((station) => station.lines.includes(lineId));
-  }
-
-  for (const suffix of stationMarkerSuffixes) {
-    if (!normalizedId.endsWith(suffix)) continue;
-    const markerName = normalizedId.slice(0, -suffix.length);
-    const aliasName = stationMarkerAliases[markerName];
-    const candidates = aliasName ? stationsByMapLabel.get(aliasName) ?? [] : [];
-    if (candidates.length === 1) return candidates[0];
-  }
-
-  return undefined;
-}
-
-function getClosestStationId(label: SVGTextElement, candidates: typeof stations, markers: SVGElement[]) {
-  if (candidates.length === 1) return candidates[0]?.id;
-
-  const labelBounds = label.getBoundingClientRect();
-  const labelX = labelBounds.left + labelBounds.width / 2;
-  const labelY = labelBounds.top + labelBounds.height / 2;
-  let closestStationId: string | undefined;
-  let closestDistance = Number.POSITIVE_INFINITY;
-
-  for (const marker of markers) {
-    const stationId = marker.getAttribute('data-app-station-id');
-    if (!stationId || !candidates.some((station) => station.id === stationId)) continue;
-    const markerBounds = marker.getBoundingClientRect();
-    const dx = markerBounds.left + markerBounds.width / 2 - labelX;
-    const dy = markerBounds.top + markerBounds.height / 2 - labelY;
-    const distance = dx * dx + dy * dy;
-    if (distance < closestDistance) {
-      closestStationId = stationId;
-      closestDistance = distance;
-    }
-  }
-
-  return closestStationId;
-}
-
 function ThemeIcon({ resolvedTheme }: { resolvedTheme: ResolvedTheme }) {
   return resolvedTheme === 'dark' ? (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mx-auto h-5 w-5">
@@ -201,206 +90,6 @@ function ThemeIcon({ resolvedTheme }: { resolvedTheme: ResolvedTheme }) {
       <path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" />
     </svg>
   );
-}
-
-interface RoutePathSample {
-  length: number;
-  x: number;
-  y: number;
-}
-
-interface RoutePathGeometry {
-  path: SVGPathElement;
-  samples: RoutePathSample[];
-}
-
-interface ClosestRoutePoint extends RoutePathSample {
-  distance: number;
-}
-
-const routePathClassAliases: Record<string, string> = {
-  hammersmith_city: 'hnc',
-  waterloo_city: 'wnc'
-};
-const maximumPathGap = 12;
-
-function getRoutePathGeometries(svg: SVGSVGElement, lineIds: readonly string[]) {
-  const geometries = new Map<string, RoutePathGeometry[]>();
-  const svgMatrix = svg.getScreenCTM();
-  if (!svgMatrix) return geometries;
-  const screenToSvg = svgMatrix.inverse();
-
-  for (const lineId of new Set(lineIds)) {
-    const pathClass = routePathClassAliases[lineId] ?? lineId;
-    const paths = lineId === 'interchange'
-      ? svg.querySelectorAll<SVGPathElement>('#station_nodes #Bank_Monument_hub path')
-      : svg.querySelectorAll<SVGPathElement>(
-        `#routes .s${pathClass} path, #routes path.s${pathClass}`
-      );
-    const pathGeometries: RoutePathGeometry[] = [];
-
-    paths.forEach((path) => {
-      const totalLength = path.getTotalLength();
-      if (totalLength <= 0) return;
-      const pathToScreen = path.getScreenCTM();
-      if (!pathToScreen) return;
-
-      const samples: RoutePathSample[] = [];
-      const sampleStep = 2.5;
-      for (let length = 0; length < totalLength; length += sampleStep) {
-        const point = path.getPointAtLength(length).matrixTransform(pathToScreen).matrixTransform(screenToSvg);
-        samples.push({ length, x: point.x, y: point.y });
-      }
-      const finalPoint = path.getPointAtLength(totalLength).matrixTransform(pathToScreen).matrixTransform(screenToSvg);
-      samples.push({ length: totalLength, x: finalPoint.x, y: finalPoint.y });
-      pathGeometries.push({ path, samples });
-    });
-
-    geometries.set(lineId, pathGeometries);
-  }
-  return geometries;
-}
-
-function closestPointOnRoutePath(geometry: RoutePathGeometry, positions: readonly { x: number; y: number }[]) {
-  let closest: ClosestRoutePoint | null = null;
-  for (const sample of geometry.samples) {
-    for (const position of positions) {
-      const distance = Math.hypot(sample.x - position.x, sample.y - position.y);
-      if (!closest || distance < closest.distance) closest = { ...sample, distance };
-    }
-  }
-  return closest;
-}
-
-function updateSectionHighlightLayer(
-  svg: SVGSVGElement,
-  layerId: string,
-  className: string,
-  sectionIds: readonly string[]
-) {
-  const routeGroup = svg.querySelector<SVGGElement>('#routes');
-  if (!routeGroup) return;
-
-  let layer = svg.querySelector<SVGGElement>(`#${layerId}`);
-  if (!layer) {
-    layer = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
-    layer.id = layerId;
-    layer.setAttribute('aria-hidden', 'true');
-    const insertBefore = layerId === 'app-route-preview-sections'
-      ? svg.querySelector('#app-travelled-sections') ?? routeGroup
-      : routeGroup;
-    routeGroup.parentNode?.insertBefore(layer, insertBefore);
-  }
-  layer.replaceChildren();
-  const colorLayer = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
-  layer.appendChild(colorLayer);
-
-  const svgMatrix = svg.getScreenCTM();
-  if (!svgMatrix || sectionIds.length === 0) return;
-
-  const toSvgCoordinates = svgMatrix.inverse();
-  const stationPositions = new Map<string, { x: number; y: number }[]>();
-  const stationMarkers = [...svg.querySelectorAll<SVGElement>('#station_nodes use[id]')];
-  for (const marker of stationMarkers) {
-    const station = getMarkerStation(marker);
-    if (!station) continue;
-
-    const bounds = marker.getBoundingClientRect();
-    const point = svg.createSVGPoint();
-    point.x = bounds.left + bounds.width / 2;
-    point.y = bounds.top + bounds.height / 2;
-    const position = point.matrixTransform(toSvgCoordinates);
-    const positions = stationPositions.get(station.id) ?? [];
-    positions.push({ x: position.x, y: position.y });
-    stationPositions.set(station.id, positions);
-  }
-
-  const requestedSections = sections.filter((section) => sectionIds.includes(section.id));
-  const pathsByLine = getRoutePathGeometries(svg, requestedSections.map((section) => section.lineId));
-  const maximumMarkerOffset = 32;
-
-  for (const section of requestedSections) {
-    if (section.lineId === 'interchange') {
-      const interchangePath = pathsByLine.get(section.lineId)?.[0];
-      if (!interchangePath || interchangePath.samples.length < 2) {
-        console.warn(`Unable to show map geometry for interchange section "${section.id}"`);
-        continue;
-      }
-
-      const pathData = interchangePath.samples.map((point, index) =>
-        `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
-      ).join(' ');
-      const path = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('class', className);
-      path.setAttribute('data-app-section-id', section.id);
-      path.setAttribute('d', pathData);
-      colorLayer.appendChild(path);
-      continue;
-    }
-
-    const from = stationPositions.get(section.from);
-    const to = stationPositions.get(section.to);
-    if (!from?.length || !to?.length) {
-      console.warn(`Unable to show section "${section.id}" because a station marker is missing`);
-      continue;
-    }
-
-    let bestPath: RoutePathGeometry | null = null;
-    let bestFrom: ClosestRoutePoint | null = null;
-    let bestTo: ClosestRoutePoint | null = null;
-    let bestScore = Number.POSITIVE_INFINITY;
-    for (const geometry of pathsByLine.get(section.lineId) ?? []) {
-      let component: RoutePathSample[] = [];
-      const components: RoutePathSample[][] = [];
-      for (const sample of geometry.samples) {
-        const previous = component.at(-1);
-        if (previous && Math.hypot(sample.x - previous.x, sample.y - previous.y) > maximumPathGap) {
-          components.push(component);
-          component = [];
-        }
-        component.push(sample);
-      }
-      if (component.length > 0) components.push(component);
-
-      for (const samples of components) {
-        const continuousGeometry = { path: geometry.path, samples };
-        const routeFrom = closestPointOnRoutePath(continuousGeometry, from);
-        const routeTo = closestPointOnRoutePath(continuousGeometry, to);
-        if (!routeFrom || !routeTo
-          || routeFrom.distance > maximumMarkerOffset
-          || routeTo.distance > maximumMarkerOffset) continue;
-
-        const score = routeFrom.distance + routeTo.distance;
-        if (score < bestScore) {
-          bestScore = score;
-          bestPath = continuousGeometry;
-          bestFrom = routeFrom;
-          bestTo = routeTo;
-        }
-      }
-    }
-
-    if (!bestPath || !bestFrom || !bestTo) {
-      console.warn(`Unable to follow map line geometry for section "${section.id}"`);
-      continue;
-    }
-
-    const startIndex = bestPath.samples.findIndex((sample) => sample.length === bestFrom.length);
-    const endIndex = bestPath.samples.findIndex((sample) => sample.length === bestTo.length);
-    const lowIndex = Math.min(startIndex, endIndex);
-    const highIndex = Math.max(startIndex, endIndex);
-    const tracedPoints = bestPath.samples.slice(lowIndex, highIndex + 1);
-    if (tracedPoints.length < 2) continue;
-    const pathData = tracedPoints.map((point, index) =>
-      `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
-    ).join(' ');
-
-    const path = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('class', className);
-    path.setAttribute('data-app-section-id', section.id);
-    path.setAttribute('d', pathData);
-    colorLayer.appendChild(path);
-  }
 }
 
 function App() {
