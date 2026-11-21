@@ -1,6 +1,6 @@
 import type { LineDefinition } from '../lib/types';
 import type { TrackSectionRecord } from './track-section';
-import { lineServices } from './line-services';
+import { continuousServiceLines, lineServices } from './line-services';
 import { TransitNetwork } from './transit-network';
 import { tflSectionRows, tflStationRows } from './tfl-network-data';
 import { walkLinkRecords } from './walk-links';
@@ -33,7 +33,7 @@ export const network = new TransitNetwork(
   tflStationRows.map(([id, name, system, lineIds]) => ({ id, name, system, lines: lineIds })),
   sectionRecords,
   walkLinkRecords,
-  { lineServices }
+  { lineServices, continuousServiceLines }
 );
 
 export const stations = network.stations;

@@ -26,6 +26,10 @@ export interface RoutingOptions {
   maxLineVariants: number;
   /** Through-services for lines whose branches do not all connect without changing (see line-services.ts). */
   lineServices: Readonly<Record<string, readonly LineService[]>>;
+  /** Lines whose services are one continuous train (see line-services.ts), so nobody changes between them. */
+  continuousServiceLines: ReadonlySet<string>;
+  /** Alternatives that change trains at a junction instead of riding straight through (see junctionChangeVariants). */
+  maxJunctionVariants: number;
 }
 
 export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = {
@@ -37,7 +41,9 @@ export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = {
   candidatePoolSize: 40,
   maxFrontierChanges: 4,
   maxLineVariants: 3,
-  lineServices: {}
+  lineServices: {},
+  continuousServiceLines: new Set(),
+  maxJunctionVariants: 3
 };
 
 /** Bound on generalised cost for Yen candidates, relative to the best found. */
@@ -89,6 +95,8 @@ export class RoutePlanner {
   private readonly edges: PhysicalEdge[] = [];
   private readonly adjacency: number[][];
   private readonly lineIdByMode: string[] = [];
+  /** Services that run round a one-way loop: their sections are stored without a direction, so which way they run is unknown. */
+  private readonly oneWayModes = new Set<number>();
   private readonly modeCount: number;
   private readonly options: RoutingOptions;
 
@@ -106,6 +114,8 @@ export class RoutePlanner {
         mode = FIRST_LINE_MODE + modeByService.size;
         modeByService.set(serviceKey, mode);
         this.lineIdByMode[mode] = lineId;
+        const segments = this.options.lineServices[lineId]?.[Number(service)];
+        if (segments?.some((stops) => stops.length > 2 && stops[0] === stops.at(-1))) this.oneWayModes.add(mode);
       }
       return mode;
     };
@@ -160,7 +170,15 @@ export class RoutePlanner {
     const fewestChanges = Math.min(...candidates.map((route) => route.changes));
     candidates = candidates.filter((route) => route.changes <= fewestChanges + maxExtraChanges);
     candidates = [...candidates, ...candidates.flatMap((route) => this.lineVariants(route))];
-    candidates.sort((x, y) => x.changes - y.changes || x.effective - y.effective);
+    const byRank = (x: PlannedRoute, y: PlannedRoute) => x.changes - y.changes || x.effective - y.effective;
+    // Changing at a junction is offered only on the most direct routes, and only a few times, so these options don't
+    // crowd out genuinely different routes.
+    const junctionVariants = candidates
+      .filter((route) => route.changes === fewestChanges)
+      .flatMap((route) => this.junctionChangeVariants(route))
+      .sort(byRank)
+      .slice(0, this.options.maxJunctionVariants);
+    candidates = [...candidates, ...junctionVariants].sort(byRank);
 
     const unique = new Map<string, RouteResult>();
     for (const candidate of candidates) {
@@ -456,6 +474,45 @@ export class RoutePlanner {
     return variants;
   }
 
+  /**
+   * The same physical route with a change between two trains of the same line at a junction where some trains on the
+   * track you arrive by don't continue your way. For example, Balham to Goodge Street can be ridden on one train, or
+   * on a Bank-branch train to Kennington and a Charing Cross-branch train from there. Riding straight through stays
+   * the first option, and recording this one marks the station where you changed.
+   */
+  private junctionChangeVariants(route: PlannedRoute): PlannedRoute[] {
+    const variants: PlannedRoute[] = [];
+    const servesAll = (mode: number, edges: readonly number[]) => edges.every((edge) => this.edges[edge]!.options.some((option) => option.mode === mode));
+    let legStart = 0;
+    while (legStart < route.options.length) {
+      const mode = route.options[legStart]!.mode;
+      let legEnd = legStart;
+      while (legEnd + 1 < route.options.length && route.options[legEnd + 1]!.mode === mode) legEnd += 1;
+
+      const lineId = this.lineIdByMode[mode]!;
+      const previousMode = legStart > 0 ? route.options[legStart - 1]!.mode : MODE_START;
+      const canChange = mode !== MODE_WALK && !this.options.continuousServiceLines.has(lineId);
+      for (let index = legStart; canChange && index < legEnd; index += 1) {
+        // Change at route.stations[index + 1], arriving by edge `index` and leaving by edge `index + 1`.
+        const continuing = new Set(this.edges[route.edges[index + 1]!]!.options.map((option) => option.mode));
+        const legSoFar = route.edges.slice(legStart, index + 1);
+        const arriving = this.edges[route.edges[index]!]!.options.find((option) => option.mode !== mode
+          && option.mode !== previousMode
+          && !this.oneWayModes.has(option.mode)
+          && this.lineIdByMode[option.mode] === lineId
+          && !continuing.has(option.mode)
+          && servesAll(option.mode, legSoFar));
+        if (!arriving) continue;
+        const options = route.options.map((option, position) => (position >= legStart && position <= index
+          ? this.edges[route.edges[position]!]!.options.find((candidate) => candidate.mode === arriving.mode)!
+          : option));
+        variants.push({ ...route, options, changes: route.changes + 1, effective: options.reduce((sum, option) => sum + option.effective, 0) });
+      }
+      legStart = legEnd + 1;
+    }
+    return variants;
+  }
+
   private toRouteResult(route: PlannedRoute): RouteResult {
     const path = route.stations.map((index) => this.stationIds[index]!);
     const links = route.options.map((option) => option.link);
@@ -484,8 +541,10 @@ export class RoutePlanner {
 
     const sections = links.filter((link): link is TrackSection => link.type === 'track');
     const walks = links.filter((link): link is WalkLink => link.type === 'walk');
+    // Where line changes happen is part of the key: a route can ride the same sections with or without a change.
+    const lineChanges = changes.flatMap((change) => (change.type === 'line' ? [change.at] : []));
     return {
-      key: links.length > 0 ? links.map((link) => link.id).join('|') : path.join('|'),
+      key: `${links.length > 0 ? links.map((link) => link.id).join('|') : path.join('|')}${lineChanges.length > 0 ? `#${lineChanges.join(',')}` : ''}`,
       path,
       links,
       sections,

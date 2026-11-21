@@ -50,7 +50,9 @@ describe('map interaction helpers', () => {
     const options = findRoutes('cannon_street', 'waterloo', 2);
     const [first, alternative] = options;
     if (!first || !alternative) throw new Error('Expected alternative route options');
-    expect(getRouteKey(first)).toBe(first.links.map((link) => link.id).join('|'));
+    // The sections ridden, then where any line changes happen (the same sections can be ridden with or without one).
+    const lineChanges = first.changes.flatMap((change) => (change.type === 'line' ? [change.at] : []));
+    expect(getRouteKey(first)).toBe(`${first.links.map((link) => link.id).join('|')}${lineChanges.length > 0 ? `#${lineChanges.join(',')}` : ''}`);
     expect(getRouteKey(first)).not.toBe(getRouteKey(alternative));
   });
 
