@@ -3,7 +3,7 @@ import { formatRouteEndpoints, getRouteKey } from '../lib/map-interactions';
 import { routeIsAlreadyComplete } from '../lib/progress';
 import { describeRouteChanges, describeRouteDistance, describeRouteTitle, getStationName } from '../lib/route-format';
 import type { Progress, RouteResult } from '../lib/types';
-import { HighlightSwatch } from './HighlightSwatch';
+import { PreviewSwatch } from './HighlightSwatches';
 
 /** On phones the bar floats over the map; its height lets the map and page leave room for it (see styles.css). */
 const ROUTE_BAR_HEIGHT_PROPERTY = '--tt-route-bar-height';
@@ -56,8 +56,8 @@ export function RouteActionBar(props: RouteActionBarProps) {
         <p className="min-w-0 flex-1 text-sm font-medium">
           {props.hasNewTrack && (
             <span className="mr-1.5 inline-flex align-[-0.1em]">
-              <HighlightSwatch band="bg-(--tt-preview)" opacity="opacity-(--tt-preview-opacity)" />
-              <span className="sr-only">New track is highlighted in orange. </span>
+              <PreviewSwatch />
+              <span className="sr-only">New track is shown as an orange dashed line. </span>
             </span>
           )}
           Route {props.activeRouteIndex + 1}: {describeRouteTitle(activeRoute)}

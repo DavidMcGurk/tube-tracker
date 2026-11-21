@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, openMap, seedTravelledSections, stationLabel } from './helpers';
+import { collectErrors, openMap, seedTravelledSections, selectStation, stationLabel } from './helpers';
 
 /**
  * Real-browser checks of the map's highlight geometry and interaction cost.
@@ -100,19 +100,137 @@ test('recorded walks are highlighted as walks', async ({ page }) => {
   await expect(page.locator('#app-travelled-sections path.app-walk-link')).toHaveCount(2);
 });
 
-test('travelled track gets a casing strip so lines stay visible on the highlight', async ({ page }) => {
+/** Where the bold-lines style reveals travelled track: a point halfway along a travelled section, in page pixels. */
+async function travelledPointOnScreen(page: Page) {
+  const point = await page.evaluate(() => {
+    const viewport = document.querySelector('.tube-map-viewport')!.getBoundingClientRect();
+    for (const path of document.querySelectorAll<SVGPathElement>('#app-travelled-mask path')) {
+      const middle = path.getPointAtLength(path.getTotalLength() / 2);
+      const screen = new DOMPoint(middle.x, middle.y).matrixTransform(path.getScreenCTM()!);
+      if (screen.x > viewport.left + 20 && screen.x < viewport.right - 20 && screen.y > viewport.top + 20 && screen.y < viewport.bottom - 20) {
+        return { x: screen.x, y: screen.y };
+      }
+    }
+    return null;
+  });
+  if (!point) throw new Error('No travelled section is on screen');
+  return point;
+}
+
+/** Counts pixels of the Central line's red in a small square of the page. */
+async function countCentralRedPixels(page: Page, centre: { x: number; y: number }) {
+  const image = await page.screenshot({ clip: { x: centre.x - 10, y: centre.y - 10, width: 20, height: 20 } });
+  return page.evaluate(async (base64) => {
+    const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob());
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let count = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      if (data[index]! > 170 && data[index + 1]! < 90 && data[index + 2]! < 90) count += 1;
+    }
+    return count;
+  }, image.toString('base64'));
+}
+
+async function setTravelledSections(page: Page, sectionFilter: string) {
+  await page.evaluate(`(async () => {
+    const network = await import('/src/data/network.ts');
+    const storage = await import('/src/lib/storage.ts');
+    const ids = network.sections.filter((section) => ${sectionFilter}).map((section) => section.id);
+    await storage.updateProgress((current) => ({ ...current, travelledSegmentIDs: ids }));
+  })()`);
+}
+
+test('by default, travelled track is the full-width line and other lines are thinner', async ({ page }) => {
+  const errors = collectErrors(page);
+  await openMap(page);
+  await seedTravelledSections(page, "section.lineId === 'central'");
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'lines');
+  await expect(page.locator('#app-travelled-mask path').first()).toBeAttached();
+
+  const layerOrder = await page.evaluate(() => [...document.querySelector('#routes')!.parentElement!.children]
+    .map((element) => element.id)
+    .filter((id) => id.startsWith('app-') || id === 'routes'));
+  expect(layerOrder).toEqual([
+    'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes',
+    'app-travelled-mask', 'app-travelled-routes', 'app-route-preview-sections'
+  ]);
+
+  const drawing = await page.evaluate(() => {
+    const width = (selector: string) => getComputedStyle(document.querySelector(selector)!).strokeWidth;
+    const display = (selector: string) => getComputedStyle(document.querySelector(selector)!).display;
+    return {
+      untravelledWidth: width('#routes .me.scentral'),
+      travelledWidth: width('#app-travelled-routes .me.scentral'),
+      stripe: display('#routes .mes'),
+      travelledStripe: display('#app-travelled-routes .mes'),
+      band: display('#app-travelled-sections path'),
+      duplicateIds: document.querySelectorAll('#app-travelled-routes [id]').length,
+      maskPaths: document.querySelectorAll('#app-travelled-mask path').length,
+      trackPaths: document.querySelectorAll('#app-travelled-sections path:not(.app-walk-link)').length
+    };
+  });
+  expect(drawing).toEqual({
+    untravelledWidth: '2.5px', travelledWidth: '5px', stripe: 'none', travelledStripe: 'inline',
+    band: 'none', duplicateIds: 0, maskPaths: drawing.trackPaths, trackPaths: drawing.trackPaths
+  });
+  expect(drawing.trackPaths).toBeGreaterThan(30);
+
+  // The mask really reveals the full-width line: forgetting the Central line leaves only the thin line there.
+  const point = await travelledPointOnScreen(page);
+  const travelledRed = await countCentralRedPixels(page, point);
+  await setTravelledSections(page, 'false');
+  await expect(page.locator('#app-travelled-mask path')).toHaveCount(0);
+  const untravelledRed = await countCentralRedPixels(page, point);
+  expect(untravelledRed).toBeGreaterThan(0);
+  expect(travelledRed).toBeGreaterThan(untravelledRed * 1.5);
+  expect(errors).toEqual([]);
+});
+
+test('the yellow band can be chosen in Settings instead, and the choice is remembered', async ({ page }) => {
   await openMap(page);
   await seedTravelledSections(page, "section.lineId === 'circle' || section.lineId === 'lioness'");
   await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const band = page.getByRole('radio', { name: /Yellow highlight/ });
+  await expect(page.getByRole('radio', { name: /Bold lines/ })).toBeChecked();
+  await band.check();
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'band');
+
+  await page.reload();
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'band');
   await openMap(page);
+  await expect(page.locator('.map-legend')).toContainText('track is highlighted in yellow');
   const travelled = page.locator('#app-travelled-sections path');
-  await expect(travelled.first()).toBeAttached();
+  await expect(travelled.first()).toBeVisible();
   const travelledCount = await travelled.count();
-  await expect(page.locator('#app-highlight-casing [data-source="travelled"] path')).toHaveCount(travelledCount);
-  const layerOrder = await page.evaluate(() => [...document.querySelector('#routes')!.parentElement!.children]
-    .map((element) => element.id)
-    .filter((id) => ['app-route-preview-sections', 'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes'].includes(id)));
-  expect(layerOrder).toEqual(['app-route-preview-sections', 'app-travelled-sections', 'app-highlight-casing', 'app-line-label-backgrounds', 'routes']);
+  // A casing strip under every travelled line keeps yellow lines visible on the yellow band.
+  await expect(page.locator('#app-highlight-casing path')).toHaveCount(travelledCount);
+  const drawing = await page.evaluate(() => ({
+    copy: getComputedStyle(document.querySelector('#app-travelled-routes')!).display,
+    lineWidth: getComputedStyle(document.querySelector('#routes .me.scircle')!).strokeWidth
+  }));
+  expect(drawing).toEqual({ copy: 'none', lineWidth: '5px' });
+});
+
+test('the selected route is drawn as a dashed path over the lines', async ({ page }, testInfo) => {
+  await openMap(page);
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'angel');
+  const route = page.locator('#app-route-preview-sections [data-part="route"] path');
+  await expect(route.first()).toBeAttached();
+  const routeCount = await route.count();
+  await expect(page.locator('#app-route-preview-sections [data-part="casing"] path')).toHaveCount(routeCount);
+  const style = await route.first().evaluate((path) => {
+    const computed = getComputedStyle(path);
+    return { dashes: computed.strokeDasharray, width: computed.strokeWidth };
+  });
+  expect(style).toEqual({ dashes: '9px, 6px', width: '4.5px' });
+  await page.locator('.tube-map-viewport').screenshot({ path: `test-results/screens/${testInfo.project.name}/preview-paddington-angel.png` });
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -130,6 +248,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       };
       return [style('Lioness line'), style('Liberty line'), style('Jubilee line')];
     })).toEqual(['rgb(196, 137, 38) 700', 'rgb(94, 104, 103) 700', 'rgb(119, 119, 119) 700']);
+    // Light mode puts a white background behind each name; dark mode outlines the letters in white instead.
+    const treatment = await page.evaluate(() => {
+      const label = document.querySelector('#text #stname > .small text')!;
+      const background = document.querySelector('#app-line-label-backgrounds rect')!;
+      return { background: getComputedStyle(background).display, outline: getComputedStyle(label).stroke };
+    });
+    expect(treatment).toEqual(colorScheme === 'light'
+      ? { background: 'inline', outline: 'none' }
+      : { background: 'none', outline: 'rgb(255, 255, 255)' });
   });
 }
 

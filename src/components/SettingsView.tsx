@@ -1,4 +1,6 @@
 import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import type { ProgressStyle } from '../lib/types';
+import { TravelledSwatch } from './HighlightSwatches';
 import { InstallAppSection } from './InstallAppSection';
 
 function ExternalLink({ href, children }: { href: string; children: string }) {
@@ -9,9 +11,49 @@ interface SettingsViewProps {
   onResetRequest: () => void;
   install: InstallPromptController;
   hasProgress: boolean;
+  progressStyle: ProgressStyle;
+  onProgressStyleChange: (style: ProgressStyle) => void;
 }
 
-export function SettingsView({ onResetRequest, install, hasProgress }: SettingsViewProps) {
+const PROGRESS_STYLE_OPTIONS: ReadonlyArray<{ value: ProgressStyle; label: string; description: string }> = [
+  { value: 'lines', label: 'Bold lines', description: 'Travelled track keeps its full width; lines you haven’t travelled are drawn thinner.' },
+  { value: 'band', label: 'Yellow highlight', description: 'Travelled track is highlighted with a yellow band beneath the lines.' }
+];
+
+function ProgressStyleSetting({ value, onChange }: { value: ProgressStyle; onChange: (style: ProgressStyle) => void }) {
+  return (
+    <fieldset>
+      <legend className="text-lg font-semibold">Map</legend>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Show travelled track as:</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {PROGRESS_STYLE_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 has-checked:border-slate-900 has-checked:bg-slate-50 has-focus-visible:outline-2 has-focus-visible:outline-blue-600 dark:border-slate-700 dark:has-checked:border-slate-300 dark:has-checked:bg-slate-800"
+          >
+            <input
+              type="radio"
+              name="progress-style"
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              className="mt-1 h-4 w-4 shrink-0 accent-slate-900 dark:accent-slate-200"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {option.label}
+                <TravelledSwatch progressStyle={option.value} />
+              </span>
+              <span className="mt-0.5 block text-xs leading-5 text-slate-600 dark:text-slate-300">{option.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+export function SettingsView({ onResetRequest, install, hasProgress, progressStyle, onProgressStyleChange }: SettingsViewProps) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-10">
       <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -21,6 +63,8 @@ export function SettingsView({ onResetRequest, install, hasProgress }: SettingsV
             <button onClick={onResetRequest} className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
           </div>
         </div>
+
+        <ProgressStyleSetting value={progressStyle} onChange={onProgressStyleChange} />
 
         <InstallAppSection install={install} hasProgress={hasProgress} />
 

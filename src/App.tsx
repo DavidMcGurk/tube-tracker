@@ -7,11 +7,13 @@ import { StatsView } from './components/StatsView';
 import { ThemeToggleButton } from './components/ThemeToggleButton';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useProgress } from './hooks/useProgress';
+import { useProgressStyle } from './hooks/useProgressStyle';
 import { useRouteSelection } from './hooks/useRouteSelection';
 import { useTheme } from './hooks/useTheme';
 import type { RouteResult } from './lib/types';
 
 type TabName = 'map' | 'stats' | 'settings';
+const APP_ICON_URL = `${import.meta.env.BASE_URL}favicon.svg`;
 const TABS: ReadonlyArray<{ id: TabName; label: string }> = [
   { id: 'map', label: 'Map' },
   { id: 'stats', label: 'Statistics' },
@@ -23,6 +25,7 @@ function App() {
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { progressStyle, setProgressStyle } = useProgressStyle();
   const { progress, error: progressError, errorKind, dismissError, recordRoute, resetProgress } = useProgress();
   const selection = useRouteSelection();
   const { clearSelection, closeChooser } = selection;
@@ -44,10 +47,17 @@ function App() {
   const handleCancelReset = useCallback(() => setResetConfirmationOpen(false), []);
 
   return (
-    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen} data-route-bar={routeActionsShowing}>
+    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen} data-route-bar={routeActionsShowing} data-progress-style={progressStyle}>
       <header className="border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <h1 className="text-xl font-semibold">Tube Tracker</h1>
+        {/*
+          The nav and the map sit in a max-w-6xl box with 1rem of padding inside it; this content box is that same width
+          (72rem − 2 × 1rem), so the title and the theme button line up with the edges of the tabs and the map.
+        */}
+        <div className="mx-auto flex max-w-[70rem] items-center justify-between">
+          <h1 className="flex items-center gap-2.5 text-xl font-semibold">
+            <img src={APP_ICON_URL} alt="" width="32" height="32" className="h-8 w-8 rounded-lg" />
+            Tube Tracker
+          </h1>
           <div className="flex items-center gap-2">
             <ThemeToggleButton resolvedTheme={resolvedTheme} onToggle={toggleTheme} />
           </div>
@@ -89,10 +99,19 @@ function App() {
           onToggleFullscreen={() => setMapFullscreen((fullscreen) => !fullscreen)}
           resolvedTheme={resolvedTheme}
           onToggleTheme={toggleTheme}
+          progressStyle={progressStyle}
         />
       )}
       {activeTab === 'stats' && <StatsView progress={progress} />}
-      {activeTab === 'settings' && <SettingsView onResetRequest={() => setResetConfirmationOpen(true)} install={install} hasProgress={hasProgress} />}
+      {activeTab === 'settings' && (
+        <SettingsView
+          onResetRequest={() => setResetConfirmationOpen(true)}
+          install={install}
+          hasProgress={hasProgress}
+          progressStyle={progressStyle}
+          onProgressStyleChange={setProgressStyle}
+        />
+      )}
       {resetConfirmationOpen && <ResetDialog onCancel={handleCancelReset} onConfirm={() => void handleConfirmReset()} />}
       <InstallPrompt install={install} hasProgress={hasProgress} suppressed={routeActionsShowing || resetConfirmationOpen} />
     </div>

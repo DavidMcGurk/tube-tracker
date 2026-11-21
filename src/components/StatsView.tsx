@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { summariseProgress } from '../lib/progress';
+import { sortLineProgress, summariseProgress } from '../lib/progress';
 import { formatKilometres, lineById } from '../lib/route-format';
 import type { Progress } from '../lib/types';
 
@@ -45,10 +45,7 @@ export function ProgressBar({ label, detail, percent, color, ariaLabel }: Progre
 
 export function StatsView({ progress }: { progress: Progress }) {
   const stats = useMemo(() => summariseProgress(progress), [progress]);
-  const sortedLineProgress = useMemo(
-    () => [...stats.lineProgress].sort((a, b) => b.completion - a.completion || a.name.localeCompare(b.name)),
-    [stats.lineProgress]
-  );
+  const sortedLineProgress = useMemo(() => sortLineProgress(stats.lineProgress), [stats.lineProgress]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-10">

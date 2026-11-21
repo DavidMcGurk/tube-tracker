@@ -3,7 +3,7 @@ import { getStationById } from '../data/network';
 import type { RouteSelection } from '../hooks/useRouteSelection';
 import { formatMapZoom } from '../lib/map-zoom';
 import { getLineName } from '../lib/route-format';
-import type { Progress, ResolvedTheme, RouteResult } from '../lib/types';
+import type { Progress, ProgressStyle, ResolvedTheme, RouteResult } from '../lib/types';
 import { useMapDecorations } from '../map/useMapDecorations';
 import { useMapGestures } from '../map/useMapGestures';
 import { useMapViewport } from '../map/useMapViewport';
@@ -20,9 +20,10 @@ interface MapViewProps {
   onToggleFullscreen: () => void;
   resolvedTheme: ResolvedTheme;
   onToggleTheme: () => void;
+  progressStyle: ProgressStyle;
 }
 
-export function MapView({ progress, selection, onRecordRoute, fullscreen, onToggleFullscreen, resolvedTheme, onToggleTheme }: MapViewProps) {
+export function MapView({ progress, selection, onRecordRoute, fullscreen, onToggleFullscreen, resolvedTheme, onToggleTheme, progressStyle }: MapViewProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const zoomReadoutRef = useRef<HTMLSpanElement | null>(null);
   const { markup, error: mapLoadError } = useReferenceMapSvg();
@@ -57,10 +58,6 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
       const [first] = recentActivationsRef.current;
       if (first?.stationId === stationId) selection.restoreSelection(first.selectionBefore);
       setInspectedStationId(stationId);
-    },
-    onStationDragSelect: (fromStationId, toStationId) => {
-      setInspectedStationId(null);
-      selection.selectPair(fromStationId, toStationId);
     },
     onStationHover: decorations.setHoveredStation
   });
@@ -101,6 +98,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           onToggleFullscreen={onToggleFullscreen}
           resolvedTheme={resolvedTheme}
           onToggleTheme={onToggleTheme}
+          progressStyle={progressStyle}
         />
 
         <div
@@ -109,7 +107,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           {...gestureHandlers}
           onScroll={viewport.handleScroll}
           role="region"
-          aria-label="Interactive London transport map. Tap station names or markers to select; drag empty space to pan; pinch to zoom."
+          aria-label="Interactive London transport map. Tap a start and an end station to choose a journey; drag to pan; pinch to zoom."
           dangerouslySetInnerHTML={{ __html: markup }}
         />
         {inspectedStation && (

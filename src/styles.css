@@ -16,15 +16,18 @@
   background: #f8fafc;
   color: #0f172a;
 
-  /* Highlight layers drawn beneath the map's lines. */
+  /* The yellow-band progress style, drawn beneath the map's lines. */
   --tt-travelled: #facc15;
   --tt-travelled-opacity: 0.5;
-  --tt-preview: #f97316;
-  --tt-preview-opacity: 0.7;
   --tt-highlight-width: 18px;
   /* A strip between each highlight and its line, so yellow lines (Circle, Lioness) stay distinct from the band. */
   --tt-highlight-casing: #fff;
   --tt-highlight-casing-width: 9px;
+  /* Walks in the bold-lines progress style, which has no band to draw them in. */
+  --tt-walked: #64748b;
+  /* The selected route's new track: a dashed path drawn over the lines, with an edge separating it from them. */
+  --tt-preview: #f97316;
+  --tt-preview-edge: #fff;
 
   /*
    * Stations you went through the gates of (journey ends, out-of-station interchanges) and stations where you changed.
@@ -48,9 +51,10 @@ html[data-theme='dark'] {
   background: #020617;
   --tt-travelled: #fbbf24;
   --tt-travelled-opacity: 0.6;
-  --tt-preview: #fb923c;
-  --tt-preview-opacity: 0.75;
   --tt-highlight-casing: #0f172a;
+  --tt-walked: #94a3b8;
+  --tt-preview: #fb923c;
+  --tt-preview-edge: #0f172a;
   --tt-station-entered: #4ade80;
   --tt-station-changed: #a78bfa;
   --tt-line-northern: #e2e8f0;
@@ -370,11 +374,11 @@ body:has(.app-shell[data-map-fullscreen='true']) {
     cursor: default !important;
   }
 
-  & #routes :is(.snorthern, .fnorthern) {
+  & :is(#routes, #app-travelled-routes) :is(.snorthern, .fnorthern) {
     stroke: #000 !important;
   }
 
-  & #routes .fnorthern {
+  & :is(#routes, #app-travelled-routes) .fnorthern {
     fill: #000 !important;
   }
 }
@@ -394,11 +398,11 @@ html[data-theme='dark'] .tube-map__svg {
   }
 
   /* Black is invisible on the dark map, so the Northern line is drawn light instead. */
-  & #routes :is(.snorthern, .sedgware) {
+  & :is(#routes, #app-travelled-routes) :is(.snorthern, .sedgware) {
     stroke: #e2e8f0 !important;
   }
 
-  & #routes .fnorthern {
+  & :is(#routes, #app-travelled-routes) .fnorthern {
     fill: #e2e8f0 !important;
     stroke: #e2e8f0 !important;
   }
@@ -423,7 +427,7 @@ html[data-theme='dark'] .tube-map__svg {
 
 /* ---------------------------------------------------------------- Map SVG: labels */
 
-/* Dark mode: map text is light with a dark halo (line-name labels keep their colours on their white backgrounds). */
+/* Dark mode: map text is light with a dark halo (line-name labels keep their colours, outlined in white below). */
 html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .small *)) {
   fill: var(--tt-label-default) !important;
   paint-order: stroke;
@@ -478,6 +482,18 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .sm
   pointer-events: none;
 }
 
+/* Dark mode: rather than a white background, line names get a white outline around their letters. */
+html[data-theme='dark'] .tube-map__svg .app-line-label-background {
+  display: none;
+}
+
+html[data-theme='dark'] .tube-map__svg #stname > .small :is(text, tspan) {
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-linejoin: round;
+  stroke-width: 3px;
+}
+
 .tube-map__svg #stname > .small :is(.flioness, .flioness text, .flioness tspan) {
   fill: #c48926 !important;
 }
@@ -504,24 +520,54 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .sm
   filter: drop-shadow(0 0 3px var(--tt-station-changed)) drop-shadow(0 0 2px var(--tt-station-changed));
 }
 
-#app-travelled-sections {
-  opacity: var(--tt-travelled-opacity);
+/*
+ * Travelled track, in one of two styles (Settings → Map), chosen by data-progress-style on the app shell:
+ * - lines (default): the map's lines are drawn thinner, and a full-width copy of them (#app-travelled-routes) is
+ *   revealed only along travelled track, so travelled track keeps its true colours and width;
+ * - band: a translucent yellow band beneath the lines, with a casing strip so yellow lines stay distinct from it.
+ */
+.app-shell[data-progress-style='lines'] .tube-map__svg {
+  & #routes .me {
+    stroke-width: 2.5px !important;
+  }
+
+  & #routes .meb {
+    stroke-width: 3px !important;
+  }
+
+  /* White centre stripes (Overground, DLR, Elizabeth line branches) would swallow a thin line. */
+  & #routes :is(.mes, .branch, .sdlr2, .swnc2) {
+    display: none !important;
+  }
+
+  & #app-highlight-casing,
+  & #app-travelled-sections > :not(.app-walk-link) {
+    display: none;
+  }
+
+  & .app-travelled-section.app-walk-link {
+    stroke: var(--tt-walked);
+    stroke-width: 10px;
+  }
 }
 
-#app-route-preview-sections {
-  opacity: var(--tt-preview-opacity);
+.app-shell[data-progress-style='band'] .tube-map__svg {
+  & #app-travelled-routes {
+    display: none;
+  }
+
+  & #app-travelled-sections {
+    opacity: var(--tt-travelled-opacity);
+  }
 }
 
-.tube-map__svg :is(.app-travelled-section, .app-route-preview-section) {
+.tube-map__svg .app-travelled-section {
   fill: none;
+  stroke: var(--tt-travelled);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: var(--tt-highlight-width);
   pointer-events: none;
-}
-
-.tube-map__svg .app-travelled-section {
-  stroke: var(--tt-travelled);
 }
 
 .tube-map__svg .app-highlight-casing {
@@ -533,12 +579,46 @@ html[data-theme='dark'] .tube-map__svg :is(text, tspan):where(:not(#stname > .sm
   pointer-events: none;
 }
 
-.tube-map__svg .app-route-preview-section {
-  stroke: var(--tt-preview);
+/*
+ * Walking interchanges are dotted so they read as walks, not track (highlight-layer.ts spaces the dots to fit each
+ * walk). The dots are wider than the map's own walking connector (drawn above them, 4 units wide with its white edge)
+ * so they show either side of it.
+ */
+.tube-map__svg .app-travelled-section.app-walk-link {
+  stroke-width: calc(var(--tt-highlight-width) * 0.75);
 }
 
-/* Walking interchanges are highlighted as a dashed band so they read as walks, not track. */
-.tube-map__svg .app-walk-link {
-  stroke-dasharray: 0 20;
-  stroke-width: calc(var(--tt-highlight-width) * 0.75);
+/* The selected route's new track: dashes over the lines (beneath the station markers and names). */
+.tube-map__svg :is(.app-route-preview-section, .app-route-preview-casing) {
+  fill: none;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.tube-map__svg .app-route-preview-casing {
+  stroke: var(--tt-preview-edge);
+  stroke-linecap: round;
+  stroke-width: 8px;
+}
+
+.tube-map__svg .app-route-preview-section {
+  stroke: var(--tt-preview);
+  stroke-dasharray: 9 6;
+  stroke-width: 4.5px;
+}
+
+.tube-map__svg :is(.app-route-preview-section, .app-route-preview-casing).app-walk-link {
+  stroke-linecap: round;
+}
+
+.tube-map__svg .app-route-preview-casing.app-walk-link {
+  stroke-width: 13px;
+}
+
+.tube-map__svg .app-route-preview-section.app-walk-link {
+  stroke-width: 10px;
+}
+
+.tube-map__svg :is(#app-travelled-routes, #app-route-preview-sections) {
+  pointer-events: none;
 }

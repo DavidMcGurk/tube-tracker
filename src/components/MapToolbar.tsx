@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { formatMapZoom } from '../lib/map-zoom';
-import type { ResolvedTheme } from '../lib/types';
-import { HighlightSwatch } from './HighlightSwatch';
+import type { ProgressStyle, ResolvedTheme } from '../lib/types';
+import { TravelledSwatch } from './HighlightSwatches';
 import { EnterFullscreenIcon, ExitFullscreenIcon } from './icons';
 import { ThemeToggleButton } from './ThemeToggleButton';
 
@@ -20,6 +20,7 @@ interface MapToolbarProps {
   onToggleFullscreen: () => void;
   resolvedTheme: ResolvedTheme;
   onToggleTheme: () => void;
+  progressStyle: ProgressStyle;
 }
 
 const toolbarButton = 'min-h-11 rounded-full border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700';
@@ -67,8 +68,11 @@ export function MapToolbar(props: MapToolbarProps) {
         {/* The legend never changes size, so the map doesn't move when a journey is selected. */}
         <div className="map-legend flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-2">
-            <HighlightSwatch band="bg-(--tt-travelled)" opacity="opacity-(--tt-travelled-opacity)" />
-            Travelled<span className="sr-only"> track is highlighted in yellow</span>
+            <TravelledSwatch progressStyle={props.progressStyle} />
+            Travelled
+            <span className="sr-only">
+              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn at full width; other lines are thinner'}
+            </span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-(--tt-station-entered)" aria-hidden="true" />
