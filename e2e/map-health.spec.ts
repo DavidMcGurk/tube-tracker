@@ -303,9 +303,9 @@ test('travelled track keeps the white details the map draws over its lines', asy
   expect(drawing.partTime.every((id) => id!.startsWith('district_earl_s_court_kensington_olympia') || id!.startsWith('elizabeth_'))).toBe(true);
 });
 
-test('the Elizabeth line meets its Heathrow Terminal 5 branch without a gap', async ({ page }) => {
+test('the Elizabeth line\'s Heathrow Terminal 5 branch starts close to the trunk', async ({ page }) => {
   await openMap(page);
-  // Heathrow Terminals 2 & 3 is marked by a Piccadilly tick; the Elizabeth line is traced from the middle of it.
+  // Heathrow Terminals 2 & 3 is marked only by a Piccadilly tick, which the Elizabeth line is traced from.
   await seedTravelledSections(page, "section.lineId === 'elizabeth'");
   await page.reload();
   await openMap(page);

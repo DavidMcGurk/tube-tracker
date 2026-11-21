@@ -13,7 +13,7 @@ import {
   type Point,
   type RankedComponent
 } from './section-geometry';
-import { measureStationAnchors, type StationAnchor } from './station-anchors';
+import { measureStationAnchors } from './station-anchors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** A station marker further than this from a line's drawn path is not considered to be on it. */
@@ -46,7 +46,7 @@ export type HighlightKind = 'travelled' | 'preview';
  */
 interface MapGeometry {
   documentKey: string;
-  stationPositions: Map<string, StationAnchor[]> | null;
+  stationPositions: Map<string, Point[]> | null;
   lineComponents: Map<string, RankedComponent[]>;
 }
 
@@ -125,7 +125,7 @@ function getGeometry(documentKey: string): MapGeometry {
 }
 
 function getStationPositions(svg: SVGSVGElement, geometry: MapGeometry) {
-  geometry.stationPositions ??= measureStationAnchors(svg, { onLine: true });
+  geometry.stationPositions ??= measureStationAnchors(svg);
   return geometry.stationPositions;
 }
 
@@ -152,19 +152,14 @@ interface Trace {
   partTime: boolean;
 }
 
-/** A tick marker's point on its own line, or the middle of the tick when tracing another line (see StationAnchor). */
-function anchorForLine(anchor: StationAnchor, lineId: string): Point {
-  return anchor.lineId && anchor.lineId !== lineId && anchor.centre ? anchor.centre : anchor;
-}
-
 /**
  * Follows a section along the map's drawing of its line. The first trace is the best fit; any further traces are
  * parallel drawings of the same track (see parallelTrackTolerance).
  */
 function traceSection(svg: SVGSVGElement, geometry: MapGeometry, section: TrackSection): Trace[] {
   const stationPositions = getStationPositions(svg, geometry);
-  const from = stationPositions?.get(section.from)?.map((anchor) => anchorForLine(anchor, section.lineId));
-  const to = stationPositions?.get(section.to)?.map((anchor) => anchorForLine(anchor, section.lineId));
+  const from = stationPositions?.get(section.from);
+  const to = stationPositions?.get(section.to);
   if (!from?.length || !to?.length) {
     warnOnce(section.id, `Unable to show section "${section.id}" because a station marker is missing`);
     return [];
