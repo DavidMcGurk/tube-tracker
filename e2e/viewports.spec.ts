@@ -89,5 +89,14 @@ test('the header lines up with the tabs and the map', async ({ page }) => {
   expect(Math.abs(title.x - firstTab.x), 'title vs tabs').toBeLessThanOrEqual(1);
   expect(Math.abs(title.x - card.x), 'title vs map').toBeLessThanOrEqual(1);
   expect(Math.abs(themeButton.x + themeButton.width - (card.x + card.width)), 'theme button vs map').toBeLessThanOrEqual(1);
-  await expect(page.getByRole('banner').locator('img')).toBeVisible();
+  // The logo is drawn straight onto the header, with no tile, so its background is the header's in either theme.
+  const logo = page.getByRole('banner').locator('svg.app-logo');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(logo.locator('rect')).toHaveCount(0);
+    for (const line of await logo.locator('path').all()) await expect(line).not.toHaveCSS('stroke', 'none');
+  }
 });
