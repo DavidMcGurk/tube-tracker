@@ -40,7 +40,8 @@ test('selection and recorded progress survive switching tabs; reset clears them'
   await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'true');
 
   await page.getByRole('button', { name: 'Statistics' }).click();
-  await expect(page.getByText(/^0\.0 km$/)).toHaveCount(0);
+  const networkTrack = page.getByRole('progressbar', { name: 'Whole network track travelled' });
+  expect(Number(await networkTrack.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Map' }).click();
   await expect(stationLabel(page, 'bank')).toHaveAttribute('data-app-selected', 'true');
   await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
@@ -50,7 +51,7 @@ test('selection and recorded progress survive switching tabs; reset clears them'
   await page.getByRole('dialog').getByRole('button', { name: 'Reset progress' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await page.getByRole('button', { name: 'Statistics' }).click();
-  await expect(page.getByText(/^0\.0 km$/)).toBeVisible();
+  await expect(page.getByRole('progressbar', { name: 'Whole network track travelled' })).toHaveAttribute('aria-valuenow', '0');
 });
 
 test('recorded progress and the chosen theme persist across reloads', async ({ page }, testInfo) => {

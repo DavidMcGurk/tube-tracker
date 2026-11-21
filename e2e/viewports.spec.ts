@@ -37,8 +37,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(routeBar).toBeHidden();
 
       await page.getByRole('button', { name: 'Statistics' }).click();
-      await expect(page.getByText('Travelled distance')).toBeVisible();
-      await expect(page.getByText(/^0\.0 km$/)).toHaveCount(0);
+      const networkTrack = page.getByRole('progressbar', { name: 'Whole network track travelled' });
+      await expect(networkTrack).toBeVisible();
+      expect(Number(await networkTrack.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
       await expectNoHorizontalPageOverflow(page);
       await page.screenshot({ path: screenshotPath(testInfo, `${colorScheme}-3-statistics`), fullPage: true });
 

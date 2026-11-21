@@ -4,14 +4,10 @@ import { formatKilometres, lineById } from '../lib/route-format';
 import type { Progress } from '../lib/types';
 
 const FALLBACK_LINE_COLOR = '#94a3b8';
+const NETWORK_COLOR = 'var(--tt-travelled)';
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-sm text-slate-500 dark:text-slate-300">{label}</p>
-      <p className="mt-2 text-3xl font-semibold">{value}</p>
-    </div>
-  );
+function percentOf(part: number, whole: number) {
+  return whole > 0 ? (part / whole) * 100 : 0;
 }
 
 interface ProgressBarProps {
@@ -53,12 +49,30 @@ export function StatsView({ progress }: { progress: Progress }) {
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-10">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Travelled distance" value={`${formatKilometres(stats.travelledDistance)} km`} />
-        <StatCard label="Network coverage" value={`${stats.coverage.toFixed(1)}%`} />
-        <StatCard label="Stations visited" value={stats.uniqueStations} />
-        <StatCard label="Completed lines" value={stats.completedLines} />
-      </div>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="network-progress-title">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h3 id="network-progress-title" className="text-lg font-semibold">Whole network</h3>
+          <span className="text-sm text-slate-600 dark:text-slate-300">
+            {stats.completedLines} / {stats.lineProgress.length} lines completed
+          </span>
+        </div>
+        <div className="space-y-3">
+          <ProgressBar
+            label="Track travelled"
+            detail={`${stats.coverage.toFixed(1)}% · ${formatKilometres(stats.travelledDistance)} / ${formatKilometres(stats.totalDistance)} km`}
+            percent={stats.coverage}
+            color={NETWORK_COLOR}
+            ariaLabel="Whole network track travelled"
+          />
+          <ProgressBar
+            label="Stations visited"
+            detail={`${percentOf(stats.uniqueStations, stats.totalStations).toFixed(1)}% · ${stats.uniqueStations} / ${stats.totalStations}`}
+            percent={percentOf(stats.uniqueStations, stats.totalStations)}
+            color={NETWORK_COLOR}
+            ariaLabel="Whole network stations visited"
+          />
+        </div>
+      </section>
 
       <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="mb-4 text-lg font-semibold">Line progress</h3>

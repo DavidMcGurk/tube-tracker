@@ -71,6 +71,7 @@ export interface NetworkSummary {
   travelledDistance: number;
   coverage: number;
   uniqueStations: number;
+  totalStations: number;
   completedLines: number;
   lineProgress: LineProgress[];
 }

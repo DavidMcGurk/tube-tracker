@@ -147,6 +147,7 @@ export function summariseProgress(progress: Progress): NetworkSummary {
     travelledDistance,
     coverage: totalNetworkDistance > 0 ? (travelledDistance / totalNetworkDistance) * 100 : 0,
     uniqueStations: visitedStationIds.size,
+    totalStations: stations.length,
     completedLines: lineProgress.filter((entry) => entry.complete).length,
     lineProgress
   };
