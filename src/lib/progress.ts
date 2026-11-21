@@ -159,6 +159,14 @@ export function summariseProgress(progress: Progress): NetworkSummary {
   };
 }
 
+/** Lines ordered by progress: track travelled, then stations visited, then name. */
+export function sortLineProgress(lineProgress: readonly LineProgress[]): LineProgress[] {
+  return [...lineProgress].sort((a, b) =>
+    b.completion - a.completion
+    || b.stationCompletion - a.stationCompletion
+    || a.name.localeCompare(b.name));
+}
+
 export function getStationState(stationId: string, progress: Progress): StationState {
   const index = getProgressIndex(progress);
   if (index.enteredOrExitedStationIds.has(stationId)) return 'entered';

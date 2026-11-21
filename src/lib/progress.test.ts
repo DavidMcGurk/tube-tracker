@@ -6,6 +6,7 @@ import {
   getJourneyStations,
   getStationState,
   routeIsAlreadyComplete,
+  sortLineProgress,
   sanitizeProgress,
   summariseProgress
 } from './progress';
@@ -131,6 +132,22 @@ describe('summariseProgress', () => {
     });
     expect(comparisons.some((line) => line.completion > line.stationCompletion)).toBe(true);
     expect(comparisons.some((line) => line.stationCompletion > line.completion)).toBe(true);
+  });
+});
+
+describe('sortLineProgress', () => {
+  it('orders lines by track travelled, then stations visited, then name', () => {
+    const line = (name: string, completion: number, stationCompletion: number) => ({
+      id: name, name, completion, stationCompletion, travelledDistance: 0, totalDistance: 1, visitedStations: 0, totalStations: 1, complete: false
+    });
+    const sorted = sortLineProgress([
+      line('Bakerloo', 0, 0),
+      line('Central', 0, 4),
+      line('Jubilee', 14, 7),
+      line('Circle', 0, 4),
+      line('Victoria', 2, 0)
+    ]);
+    expect(sorted.map((entry) => entry.name)).toEqual(['Jubilee', 'Victoria', 'Central', 'Circle', 'Bakerloo']);
   });
 });
 

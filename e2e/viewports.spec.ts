@@ -72,3 +72,22 @@ test('a phone held sideways keeps the map usable with a route and its alternativ
   await expectWithinViewport(page, page.locator('.route-action-bar').getByRole('button', { name: 'Hide alternative routes' }), 'hide alternatives button');
   await page.screenshot({ path: screenshotPath(testInfo, 'landscape-alternatives') });
 });
+
+test('the header lines up with the tabs and the map', async ({ page }) => {
+  await openMap(page);
+  const box = async (locator: ReturnType<typeof page.locator>) => {
+    const bounds = await locator.boundingBox();
+    if (!bounds) throw new Error('Expected element to be rendered');
+    return bounds;
+  };
+  const [title, themeButton, firstTab, card] = await Promise.all([
+    box(page.getByRole('banner').getByRole('heading')),
+    box(page.getByRole('banner').getByRole('button')),
+    box(page.getByRole('navigation').getByRole('button').first()),
+    box(page.locator('.map-card'))
+  ]);
+  expect(Math.abs(title.x - firstTab.x), 'title vs tabs').toBeLessThanOrEqual(1);
+  expect(Math.abs(title.x - card.x), 'title vs map').toBeLessThanOrEqual(1);
+  expect(Math.abs(themeButton.x + themeButton.width - (card.x + card.width)), 'theme button vs map').toBeLessThanOrEqual(1);
+  await expect(page.getByRole('banner').locator('img')).toBeVisible();
+});
