@@ -2,15 +2,11 @@ import { getStationById } from '../data/network';
 import { getStationState } from '../lib/progress';
 import { normalizeStationLabel } from '../lib/map-interactions';
 import type { Progress } from '../lib/types';
-import { getClosestStationId, getMarkerStation, stationsByMapLabel } from './station-binding';
+import { measureStationAnchors } from './station-anchors';
+import { getClosestStationId, getMarkerStation, STATION_MARKER_SELECTOR, stationsByMapLabel } from './station-binding';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HIT_AREA_RADIUS = 18;
-/** Bank and Monument are drawn as one hub group; these are their centres in the hub's own coordinates. */
-const BANK_MONUMENT_HUB_POINTS = [
-  { label: 'bank', x: 7.25, y: 0 },
-  { label: 'monument', x: 20.25, y: 27 }
-] as const;
 
 export type StationFlag = 'data-app-selected' | 'data-app-hovered';
 
@@ -21,19 +17,18 @@ export interface StationIndex {
 
 const stationIndexCache = new WeakMap<SVGSVGElement, StationIndex>();
 
-function createHitArea(document: Document, x: number, y: number, stationId: string, source: string) {
+function createHitArea(document: Document, x: number, y: number, stationId: string) {
   const hitArea = document.createElementNS(SVG_NS, 'circle');
   hitArea.setAttribute('class', 'app-station-hit-area');
   hitArea.setAttribute('cx', String(x));
   hitArea.setAttribute('cy', String(y));
   hitArea.setAttribute('r', String(HIT_AREA_RADIUS));
   hitArea.setAttribute('data-app-station-id', stationId);
-  hitArea.setAttribute('data-app-station-hit-area', source);
   return hitArea;
 }
 
-/** Adds generous transparent tap targets around each station marker. */
-function addHitAreas(svg: SVGSVGElement, markers: readonly SVGElement[]) {
+/** Adds generous transparent tap targets around every drawn station position. */
+function addHitAreas(svg: SVGSVGElement) {
   const stationNodes = svg.querySelector<SVGGElement>('#station_nodes');
   if (!stationNodes || svg.querySelector('#app-station-hit-areas')) return;
 
@@ -42,23 +37,16 @@ function addHitAreas(svg: SVGSVGElement, markers: readonly SVGElement[]) {
   hitAreaGroup.setAttribute('aria-hidden', 'true');
   stationNodes.insertBefore(hitAreaGroup, stationNodes.firstChild);
 
+  const anchors = measureStationAnchors(svg);
+  const svgMatrix = svg.getScreenCTM();
   const stationNodesMatrix = stationNodes.getScreenCTM();
-  if (stationNodesMatrix) {
-    const toStationNodes = stationNodesMatrix.inverse();
-    for (const marker of markers) {
-      const station = getMarkerStation(marker);
-      if (!station) continue;
-      const bounds = marker.getBoundingClientRect();
-      const centre = new DOMPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2).matrixTransform(toStationNodes);
-      hitAreaGroup.appendChild(createHitArea(svg.ownerDocument, centre.x, centre.y, station.id, marker.id));
+  if (!anchors || !svgMatrix || !stationNodesMatrix) return;
+  const svgToStationNodes = stationNodesMatrix.inverse().multiply(svgMatrix);
+  for (const [stationId, points] of anchors) {
+    for (const point of points) {
+      const local = new DOMPoint(point.x, point.y).matrixTransform(svgToStationNodes);
+      hitAreaGroup.appendChild(createHitArea(svg.ownerDocument, local.x, local.y, stationId));
     }
-  }
-
-  const hub = svg.querySelector<SVGGElement>('#Bank_Monument_hub');
-  if (!hub) return;
-  for (const point of BANK_MONUMENT_HUB_POINTS) {
-    const station = stationsByMapLabel.get(point.label)?.[0];
-    if (station) hub.appendChild(createHitArea(svg.ownerDocument, point.x, point.y, station.id, `Bank_Monument_${station.id}`));
   }
 }
 
@@ -78,8 +66,8 @@ function buildStationIndex(svg: SVGSVGElement): StationIndex {
     elementsByStation.set(stationId, elements);
   };
 
-  const markers = [...svg.querySelectorAll<SVGElement>('#station_nodes use[id]')];
-  addHitAreas(svg, markers);
+  const markers = [...svg.querySelectorAll<SVGElement>(STATION_MARKER_SELECTOR)];
+  addHitAreas(svg);
   for (const marker of markers) {
     const station = getMarkerStation(marker);
     if (station) bind(marker, station.id);

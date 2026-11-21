@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   base: './',
   test: {
-    exclude: [...configDefaults.exclude, 'e2e/**']
+    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/**']
   },
   plugins: [
     react(),

@@ -6,6 +6,17 @@ import { createStationLabelIndex, normalizeStationLabel } from '../lib/map-inter
  * symbol hrefs such as "#stnorthern", and label text) to station ids in the network data.
  */
 
+/** Interchange connectors in #station_nodes are drawn with these classes; they are not station markers. */
+const CONNECTOR_CLASSES = ':not(.osi, .osib, .isi, .isib, .isit)';
+export const STATION_MARKER_SELECTOR = `#station_nodes use[id]${CONNECTOR_CLASSES}`;
+export const UNNAMED_MARKER_SELECTOR = `:scope > use:not([id])${CONNECTOR_CLASSES}`;
+
+/** Bank and Monument are drawn as one hub group; these are their centres in the hub's own coordinates. */
+export const BANK_MONUMENT_HUB_POINTS = [
+  { label: 'bank', x: 7.25, y: 0 },
+  { label: 'monument', x: 20.25, y: 27 }
+] as const;
+
 export const stationsByMapLabel = createStationLabelIndex(stations);
 const stationMarkerLabelEntries = [...stationsByMapLabel.entries()].sort(([a], [b]) => b.length - a.length);
 const stationMarkerAliases: Record<string, string> = {

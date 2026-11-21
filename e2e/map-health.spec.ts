@@ -9,26 +9,8 @@ test.beforeEach(({ }, testInfo) => {
   test.skip(testInfo.project.name !== 'laptop-1280', 'map health checks run on one desktop project');
 });
 
-/**
- * Sections that cannot currently be drawn on the map. Phase 2 / F1 empties this list.
- * Causes: Northern Edgware/Charing Cross/Battersea branches use the SVG class `sedgware`; Bank, Monument and
- * Aldgate have no `use[id]` marker; Bow Church–Devons Road spans two DLR path elements.
- */
-const KNOWN_UNDRAWN_SECTIONS: string[] = [
-  'central_bank_liverpool_street', 'central_st_paul_s_bank',
-  'circle_aldgate_liverpool_street', 'circle_aldgate_tower_hill', 'circle_monument_cannon_street', 'circle_monument_tower_hill',
-  'district_monument_cannon_street', 'district_monument_tower_hill',
-  'dlr_bank_shadwell', 'dlr_bow_church_devons_road',
-  'metropolitan_aldgate_liverpool_street',
-  'northern_bank_london_bridge', 'northern_bank_moorgate', 'northern_battersea_power_station_nine_elms',
-  'northern_belsize_park_chalk_farm', 'northern_belsize_park_hampstead', 'northern_brent_cross_golders_green',
-  'northern_brent_cross_hendon_central', 'northern_burnt_oak_colindale', 'northern_burnt_oak_edgware',
-  'northern_chalk_farm_camden_town', 'northern_colindale_hendon_central', 'northern_embankment_charing_cross',
-  'northern_embankment_waterloo', 'northern_golders_green_hampstead', 'northern_goodge_street_tottenham_court_road',
-  'northern_goodge_street_warren_street', 'northern_kennington_nine_elms', 'northern_kennington_waterloo',
-  'northern_leicester_square_charing_cross', 'northern_leicester_square_tottenham_court_road', 'northern_warren_street_euston',
-  'waterloo_city_bank_waterloo'
-];
+/** Sections that cannot be drawn on the map. Every track section should be drawable. */
+const KNOWN_UNDRAWN_SECTIONS: string[] = [];
 
 function collectUndrawnSections(page: Page) {
   const undrawn = new Set<string>();

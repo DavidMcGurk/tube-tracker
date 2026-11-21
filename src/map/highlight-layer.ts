@@ -2,18 +2,25 @@ import { sections } from '../data/network';
 import type { TrackSection } from '../data/track-section';
 import {
   closestPointOnComponent,
+  joinTouchingComponents,
+  polylineLength,
   sampleInterchangePath,
   sampleLineComponents,
   toPathData,
   type ClosestPoint,
   type PathComponent,
-  type Point
+  type Point,
+  type RankedComponent
 } from './section-geometry';
-import { getMarkerStation } from './station-binding';
+import { measureStationAnchors } from './station-anchors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** A station marker further than this from a line's drawn path is not considered to be on it. */
 const maximumMarkerOffset = 32;
+/** Score handicap per class rank, so a line's primary path wins near-ties against its secondary paths. */
+const classRankPenalty = 3;
+/** A trace much longer than the straight line between its stations followed the wrong path, so it is rejected. */
+const maximumTraceToDistanceRatio = 4;
 
 export const TRAVELLED_LAYER_ID = 'app-travelled-sections';
 export const PREVIEW_LAYER_ID = 'app-route-preview-sections';
@@ -25,7 +32,7 @@ export const PREVIEW_LAYER_ID = 'app-route-preview-sections';
 interface MapGeometry {
   documentKey: string;
   stationPositions: Map<string, Point[]> | null;
-  lineComponents: Map<string, PathComponent[]>;
+  lineComponents: Map<string, RankedComponent[]>;
   interchangePath: Point[] | null;
 }
 
@@ -39,25 +46,8 @@ function getGeometry(documentKey: string): MapGeometry {
   return geometryCache;
 }
 
-function measureStationPositions(svg: SVGSVGElement): Map<string, Point[]> | null {
-  const svgMatrix = svg.getScreenCTM();
-  if (!svgMatrix) return null;
-  const toSvgCoordinates = svgMatrix.inverse();
-  const positions = new Map<string, Point[]>();
-  for (const marker of svg.querySelectorAll<SVGElement>('#station_nodes use[id]')) {
-    const station = getMarkerStation(marker);
-    if (!station) continue;
-    const bounds = marker.getBoundingClientRect();
-    const point = new DOMPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2).matrixTransform(toSvgCoordinates);
-    const stationPositions = positions.get(station.id) ?? [];
-    stationPositions.push({ x: point.x, y: point.y });
-    positions.set(station.id, stationPositions);
-  }
-  return positions;
-}
-
 function getStationPositions(svg: SVGSVGElement, geometry: MapGeometry) {
-  geometry.stationPositions ??= measureStationPositions(svg);
+  geometry.stationPositions ??= measureStationAnchors(svg);
   return geometry.stationPositions;
 }
 
@@ -93,24 +83,70 @@ function traceSection(svg: SVGSVGElement, geometry: MapGeometry, section: TrackS
     return null;
   }
 
-  let best: { component: PathComponent; from: ClosestPoint; to: ClosestPoint; score: number } | null = null;
-  for (const component of getLineComponents(svg, geometry, section.lineId)) {
-    const routeFrom = closestPointOnComponent(component, from);
-    const routeTo = closestPointOnComponent(component, to);
-    if (!routeFrom || !routeTo || routeFrom.distance > maximumMarkerOffset || routeTo.distance > maximumMarkerOffset) continue;
-    const score = routeFrom.distance + routeTo.distance;
-    if (!best || score < best.score) best = { component, from: routeFrom, to: routeTo, score };
-  }
-
-  if (!best) {
+  const components = getLineComponents(svg, geometry, section.lineId);
+  const fit = fitSingleComponent(components, from, to) ?? fitJoinedComponents(components, from, to);
+  if (!fit) {
     warnOnce(section.id, `Unable to follow map line geometry for section "${section.id}"`);
     return null;
   }
 
-  const low = Math.min(best.from.index, best.to.index);
-  const high = Math.max(best.from.index, best.to.index);
-  const tracedPoints = best.component.slice(low, high + 1);
-  return tracedPoints.length >= 2 ? toPathData(tracedPoints) : null;
+  const low = Math.min(fit.from.index, fit.to.index);
+  const high = Math.max(fit.from.index, fit.to.index);
+  const tracedPoints = fit.points.slice(low, high + 1);
+  if (tracedPoints.length < 2) return null;
+  if (polylineLength(tracedPoints) > maximumTraceToDistanceRatio * closestDistance(from, to)) {
+    warnOnce(section.id, `Rejected an implausibly long map trace for section "${section.id}"`);
+    return null;
+  }
+  return toPathData(tracedPoints);
+}
+
+interface ComponentFit {
+  points: PathComponent;
+  from: ClosestPoint;
+  to: ClosestPoint;
+  score: number;
+}
+
+function fitComponent(points: PathComponent, from: readonly Point[], to: readonly Point[], penalty: number): ComponentFit | null {
+  const routeFrom = closestPointOnComponent(points, from);
+  const routeTo = closestPointOnComponent(points, to);
+  if (!routeFrom || !routeTo || routeFrom.distance > maximumMarkerOffset || routeTo.distance > maximumMarkerOffset) return null;
+  return { points, from: routeFrom, to: routeTo, score: routeFrom.distance + routeTo.distance + penalty };
+}
+
+function fitSingleComponent(components: readonly RankedComponent[], from: readonly Point[], to: readonly Point[]) {
+  let best: ComponentFit | null = null;
+  for (const { points, classRank } of components) {
+    const fit = fitComponent(points, from, to, classRank * classRankPenalty);
+    if (fit && (!best || fit.score < best.score)) best = fit;
+  }
+  return best;
+}
+
+/** Fallback for sections whose stations sit on two drawn paths that meet end to end. */
+function fitJoinedComponents(components: readonly RankedComponent[], from: readonly Point[], to: readonly Point[]) {
+  const near = (points: PathComponent, positions: readonly Point[]) =>
+    (closestPointOnComponent(points, positions)?.distance ?? Infinity) <= maximumMarkerOffset;
+  const fromCandidates = components.filter(({ points }) => near(points, from));
+  const toCandidates = components.filter(({ points }) => near(points, to));
+
+  let best: ComponentFit | null = null;
+  for (const a of fromCandidates) {
+    for (const b of toCandidates) {
+      if (a === b) continue;
+      const joined = joinTouchingComponents(a.points, b.points);
+      const fit = joined && fitComponent(joined, from, to, Math.max(a.classRank, b.classRank) * classRankPenalty);
+      if (fit && (!best || fit.score < best.score)) best = fit;
+    }
+  }
+  return best;
+}
+
+function closestDistance(from: readonly Point[], to: readonly Point[]) {
+  let closest = Infinity;
+  for (const a of from) for (const b of to) closest = Math.min(closest, Math.hypot(a.x - b.x, a.y - b.y));
+  return closest;
 }
 
 function ensureLayer(svg: SVGSVGElement, layerId: string, before: Element) {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import referenceMapSvg from '../assets/reference-map-clean.svg?raw';
 import { stations } from '../data/network';
-import { getMarkerStationById } from './station-binding';
+import { normalizeStationLabel } from '../lib/map-interactions';
+import { getMarkerStationById, stationsByMapLabel } from './station-binding';
 
 /** `<use id=… href=…>` markers inside the SVG's #station_nodes group, extracted without a DOM. */
 function getStationNodeMarkers() {
@@ -32,5 +33,14 @@ describe('SVG station binding', () => {
     const unmarked = stations.filter((station) => !markedStationIds.has(station.id)).map((station) => station.id);
     // Bank and Monument are drawn as one hub group, and Aldgate's marker has no id; F1 gives these explicit positions.
     expect(unmarked.sort()).toEqual(['aldgate', 'bank', 'monument']);
+  });
+
+  it('has a name label for every station', () => {
+    const textStart = referenceMapSvg.indexOf('id="text"');
+    const labels = [...referenceMapSvg.slice(textStart).matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)]
+      .map(([, inner]) => normalizeStationLabel((inner ?? '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&')));
+    const labelledStationIds = new Set(labels.flatMap((label) => stationsByMapLabel.get(label) ?? []).map((station) => station.id));
+    const unlabelled = stations.filter((station) => !labelledStationIds.has(station.id)).map((station) => station.id);
+    expect(unlabelled).toEqual([]);
   });
 });
