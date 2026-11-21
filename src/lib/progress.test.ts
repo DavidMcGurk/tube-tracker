@@ -67,6 +67,22 @@ describe('Tube Tracker logic', () => {
     }
   });
 
+  it('reports stations untouched by any recorded journey as neutral', () => {
+    const route = findRoute('paddington', 'waterloo');
+    const progress = addRouteToProgress(EMPTY_PROGRESS, route!, 'paddington', 'waterloo');
+    expect(getStationState('upminster', progress)).toBe('neutral');
+    expect(getStationState('paddington', EMPTY_PROGRESS)).toBe('neutral');
+  });
+
+  it('characterises the current all-sections summary (changes here must be deliberate)', () => {
+    const lineSectionIds = sections.filter((section) => section.lineId !== 'interchange').map((section) => section.id);
+    const summary = summariseProgress({ ...EMPTY_PROGRESS, travelledSegmentIDs: lineSectionIds });
+    expect(summary.completedLines).toBe(19);
+    expect(summary.totalDistance / 1000).toBeCloseTo(784.5, 1);
+    // The Bank–Monument walk is still counted as network distance today, so line sections alone fall just short of 100%.
+    expect(summary.coverage).toBeCloseTo(99.9577, 3);
+  });
+
   it('keeps distance and station coverage independent when either is higher', () => {
     const comparisons = sections.map((section) => {
       const summary = summariseProgress({
