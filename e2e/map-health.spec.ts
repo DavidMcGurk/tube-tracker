@@ -165,6 +165,15 @@ test('by default, travelled track is drawn wide and solid in its line colour, an
   await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'lines');
   await expect(page.locator(TRAVELLED_LINE_PATHS).first()).toBeAttached();
 
+  // The legend shows both widths, with "Travelled" and "Not yet" set the same way.
+  const legendStyles = await page.locator('.map-legend > span').evaluateAll((entries) => entries.slice(0, 2).map((entry) => {
+    const style = getComputedStyle(entry);
+    return { text: entry.firstChild?.nextSibling?.textContent?.trim(), font: `${style.fontSize} ${style.fontWeight}`, colour: style.color };
+  }));
+  expect(legendStyles.map((entry) => entry.text)).toEqual(['Travelled', 'Not yet']);
+  expect(legendStyles[1]!.font).toBe(legendStyles[0]!.font);
+  expect(legendStyles[1]!.colour).toBe(legendStyles[0]!.colour);
+
   const layerOrder = await page.evaluate(() => [...document.querySelector('#routes')!.parentElement!.children]
     .map((element) => element.id)
     .filter((id) => id.startsWith('app-') || id === 'routes'));
@@ -335,6 +344,7 @@ test('the yellow band can be chosen in Settings instead, and the choice is remem
   await expect(page.locator('.app-shell')).toHaveAttribute('data-progress-style', 'band');
   await openMap(page);
   await expect(page.locator('.map-legend')).toContainText('track is highlighted in yellow');
+  await expect(page.locator('.map-legend')).not.toContainText('Not yet');
   const travelled = page.locator('#app-travelled-sections path');
   await expect(travelled.first()).toBeVisible();
   const travelledCount = await travelled.count();

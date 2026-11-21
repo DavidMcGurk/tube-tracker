@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { formatMapZoom } from '../lib/map-zoom';
 import type { ProgressStyle, ResolvedTheme } from '../lib/types';
-import { TravelledSwatch } from './HighlightSwatches';
+import { TravelledSwatch, UntravelledSwatch } from './HighlightSwatches';
 import { EnterFullscreenIcon, ExitFullscreenIcon } from './icons';
 import { ThemeToggleButton } from './ThemeToggleButton';
 
@@ -67,13 +67,20 @@ export function MapToolbar(props: MapToolbarProps) {
         <ThemeToggleButton className="fullscreen-theme-control" resolvedTheme={props.resolvedTheme} onToggle={props.onToggleTheme} />
         {/* The legend never changes size, so the map doesn't move when a journey is selected. */}
         <div className="map-legend flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-slate-600 dark:text-slate-300">
-          <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 font-semibold">
             <TravelledSwatch progressStyle={props.progressStyle} />
             Travelled
             <span className="sr-only">
-              {props.progressStyle === 'band' ? ' track is highlighted in yellow' : ' track is drawn bold; other lines are thinner'}
+              {props.progressStyle === 'band' ? ': travelled track is highlighted in yellow' : ': travelled track is drawn bold'}
             </span>
           </span>
+          {/* In the bold-lines style, the legend shows both widths: the difference between them is what to look for. */}
+          {props.progressStyle === 'lines' && (
+            <span className="inline-flex items-center gap-1.5 font-semibold">
+              <UntravelledSwatch />
+              Not yet<span className="sr-only">: track not yet travelled is drawn thin</span>
+            </span>
+          )}
           {/* Station names are coloured by journey state (the markers are not), so the legend shows coloured words too. */}
           <span className="font-semibold text-(--tt-label-entered)">
             Visited<span className="sr-only">: names of stations you entered or exited are green</span>
