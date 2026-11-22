@@ -3,9 +3,10 @@
  * timer and listener; hooks only subscribe to its snapshot and call its actions.
  *
  * It sends the outbox when there's something to send: shortly after a local change, when the app starts, comes back
- * to the foreground or online (and also fetches then if the last sync is over 2 minutes old), when the page is hidden
- * (which also ends the latest journey's undo window), when that window closes, and on "Back up now". There's no
- * periodic poll: every request counts against the free plan's daily budget.
+ * to the foreground or gets the focus (after a short pause) or comes online (and also fetches then, so it shows changes
+ * made on other devices, unless it synced in the last few seconds), when the page is hidden (which also ends the
+ * latest journey's undo window) or the window loses the focus, when that window closes, and on "Back up now". There's
+ * no periodic poll: every request counts against the free plan's daily budget.
  */
 import * as defaultApi from './sync-api';
 import { isHttpError, SyncHttpError, SyncNetworkError, SYNC_CONFIGURED, type Account, type Passkey, type PushResult, type SignIn } from './sync-api';
@@ -29,8 +30,19 @@ import {
 import { countItemIds, LIMITS } from './sync-model';
 
 export const LOCAL_CHANGE_DELAY_MS = 1_500;
-/** Starting, coming back or coming online also fetches the latest backup when the last sync is at least this old. */
-export const STALE_AFTER_MS = 2 * 60 * 1000;
+/**
+ * Starting, coming back, getting the focus or coming online also fetches the latest backup, so changes made on another
+ * device show up, unless the last sync was more recent than this. The short gap stops quick switching, and tabs (which
+ * share it), from fetching the same thing again and again. Each browser's storage has its own, so one session can
+ * check about 12 times a minute at most; the server allows 30 syncs a minute per user, shared by all their sessions.
+ */
+export const STALE_AFTER_MS = 5_000;
+/**
+ * Coming back or getting the focus checks after this pause rather than at once. The window or app being left sends
+ * anything ready straight away (on blur or hidden), and the pause lets that reach the server first. Leaving again
+ * within the pause cancels the check, so switching straight through fetches nothing.
+ */
+export const RETURN_CHECK_DELAY_MS = 1_500;
 export const MAX_REQUESTS_PER_RUN = 5;
 /** The server accepts 256 KB; batches stop at about this much JSON. */
 export const MAX_BATCH_BYTES = 200 * 1024;
@@ -190,15 +202,29 @@ export function classifyFailure(error: unknown): FailureKind {
 }
 
 /**
- * start: app start. visible/online: back in the foreground or online. retry: a backoff or Retry-After ended. These
- * fetch even with nothing to send, if the last sync is stale. local: a change was recorded (after the debounce).
- * hidden: the page is being hidden (after ending any undo window). signin: backup was just turned on or restored.
- * released: the latest journey's undo window closed. These only send. manual: "Back up now", which always syncs, and first ends the undo window and
- * re-queues held rows.
+ * start: app start. visible/online: back in the foreground or online. focus: the window got the focus (on a computer,
+ * switching between windows that are both on screen never changes visibility). visible and focus run after
+ * RETURN_CHECK_DELAY_MS. retry: a backoff or Retry-After ended. These fetch even with nothing to send, if the last sync
+ * is stale. local: a change was recorded (after the debounce). hidden: the page is being hidden (after ending any undo
+ * window). blur: the window lost the focus. signin: backup was just turned on or restored. released: the latest
+ * journey's undo window closed. These only send. manual: "Back up now", which always syncs, and first ends the undo
+ * window and re-queues held rows.
  */
-type Trigger = 'start' | 'visible' | 'online' | 'retry' | 'local' | 'hidden' | 'signin' | 'released' | 'manual';
+type Trigger = 'start' | 'visible' | 'focus' | 'online' | 'retry' | 'local' | 'hidden' | 'blur' | 'signin' | 'released' | 'manual';
 
-const TRIGGER_RANK: Record<Trigger, number> = { local: 1, hidden: 1, signin: 1, released: 1, start: 2, visible: 2, online: 2, retry: 2, manual: 3 };
+const TRIGGER_RANK: Record<Trigger, number> = {
+  local: 1,
+  hidden: 1,
+  blur: 1,
+  signin: 1,
+  released: 1,
+  start: 2,
+  visible: 2,
+  focus: 2,
+  online: 2,
+  retry: 2,
+  manual: 3
+};
 
 interface Listenable {
   addEventListener(type: string, listener: () => void): void;
@@ -237,6 +263,8 @@ export class SyncEngine implements SyncActions {
   private statusTimer: ReturnType<typeof setTimeout> | null = null;
   /** Fires when the latest journey's undo window closes, to send it. */
   private releaseTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The check after coming back or getting the focus (RETURN_CHECK_DELAY_MS). */
+  private returnTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffAttempt = 0;
   /** Set from Retry-After: nothing is sent before then, whatever the trigger. */
   private retryAfterUntil = 0;
@@ -270,11 +298,17 @@ export class SyncEngine implements SyncActions {
     if (window) {
       const onOnline = () => this.trigger('online');
       const onOffline = () => this.emit();
+      const onFocus = () => this.onReturn('focus');
+      const onBlur = () => this.onBlur();
       window.addEventListener('online', onOnline);
       window.addEventListener('offline', onOffline);
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('blur', onBlur);
       this.cleanups.push(() => {
         window.removeEventListener('online', onOnline);
         window.removeEventListener('offline', onOffline);
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('blur', onBlur);
       });
     }
     if (this.options.observe !== false) {
@@ -298,6 +332,7 @@ export class SyncEngine implements SyncActions {
     this.started = false;
     for (const cleanup of this.cleanups.splice(0)) cleanup();
     this.clearDebounce();
+    this.clearReturnCheck();
     for (const timer of [this.retryTimer, this.statusTimer, this.releaseTimer]) if (timer !== null) clearTimeout(timer);
     this.retryTimer = null;
     this.statusTimer = null;
@@ -337,9 +372,10 @@ export class SyncEngine implements SyncActions {
 
   private onVisibilityChange(state: DocumentVisibilityState) {
     if (state === 'visible') {
-      this.trigger('visible');
+      this.onReturn('visible');
       return;
     }
+    this.clearReturnCheck();
     // Best effort: the page may be frozen or closed soon, so send what's waiting now rather than after the debounce.
     const now = Date.now();
     if (this.summary && waitingForUndo(this.summary, now) > 0) {
@@ -352,15 +388,49 @@ export class SyncEngine implements SyncActions {
     }
   }
 
+  /**
+   * Back in the foreground, or the window got the focus: sync, which also checks for changes made elsewhere, once
+   * RETURN_CHECK_DELAY_MS has passed. Coming back resets the backoff now. The focus doesn't, as it can change many times
+   * a minute on a computer. Another of these events during the pause neither adds a check nor pushes it back.
+   */
+  private onReturn(trigger: 'visible' | 'focus') {
+    if (!this.started) return;
+    if (this.retryAfterActive()) {
+      this.emit();
+      return;
+    }
+    if (trigger === 'visible') this.resetBackoff();
+    if (this.returnTimer !== null) return;
+    this.returnTimer = setTimeout(() => {
+      this.returnTimer = null;
+      this.trigger(trigger);
+    }, RETURN_CHECK_DELAY_MS);
+  }
+
+  /**
+   * The window lost the focus, on a computer often to another window that stays on screen. What's ready is sent now
+   * rather than after the debounce, so the other window's check finds it. Unlike hiding, this leaves the undo window
+   * open, because its bar is still on screen. A check still waiting from coming back is dropped.
+   */
+  private onBlur() {
+    this.clearReturnCheck();
+    if (this.debounceTimer !== null || (this.summary && readyToSend(this.summary, Date.now()) > 0)) this.trigger('blur');
+  }
+
   private trigger(trigger: Trigger) {
     if (!this.started) return;
     if (this.retryAfterActive()) {
       this.emit();
       return;
     }
-    if (trigger === 'visible' || trigger === 'online') this.resetBackoff();
-    if (trigger === 'hidden') this.clearDebounce();
+    if (trigger === 'online') this.resetBackoff();
+    if (trigger === 'hidden' || trigger === 'blur') this.clearDebounce();
     void this.requestRun(trigger);
+  }
+
+  private clearReturnCheck() {
+    if (this.returnTimer !== null) clearTimeout(this.returnTimer);
+    this.returnTimer = null;
   }
 
   private retryAfterActive() {
@@ -434,7 +504,13 @@ export class SyncEngine implements SyncActions {
   private shouldSend(trigger: Trigger, summary: SyncSummary) {
     if (!summary.account) return false;
     if (trigger === 'manual') return true;
+    // A Retry-After that began while this run was queued (or waiting for the Web Lock) still holds. 'retry' is the run
+    // its timer starts when it ends.
+    if (trigger !== 'retry' && this.retryAfterActive()) return false;
     if (summary.lastError && !summary.lastError.retryable && trigger !== 'start') return false;
+    // These reset the backoff when their event arrives, or (focus) never do, so a retry waiting now means a failure
+    // since then. The retry will sync.
+    if ((trigger === 'visible' || trigger === 'focus' || trigger === 'online') && this.retryTimer !== null) return false;
     if (readyToSend(summary, Date.now()) > 0) return true;
     if (TRIGGER_RANK[trigger] === 1) return false;
     return summary.lastSyncedAt === null || Date.now() - summary.lastSyncedAt >= STALE_AFTER_MS;

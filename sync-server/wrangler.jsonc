@@ -36,9 +36,11 @@
   // Coarse CPU and D1 guards, counted per Cloudflare location (approximate by design). They don't protect the daily
   // request budget: a blocked request still counts. The code allows requests if a binding is missing or fails, and
   // RATE_LIMITS=off (local and e2e only) turns them off. namespace_id is any number unique within the account.
+  // Syncs are per user, shared by all their sessions: each session checks for changes whenever it comes back (at most
+  // about 12 a minute), and a sync that changes nothing reads D1 but writes nothing.
   "ratelimits": [
     { "name": "AUTH_RATE_LIMITER", "namespace_id": "8701", "simple": { "limit": 20, "period": 60 } },
-    { "name": "SYNC_RATE_LIMITER", "namespace_id": "8702", "simple": { "limit": 10, "period": 60 } }
+    { "name": "SYNC_RATE_LIMITER", "namespace_id": "8702", "simple": { "limit": 30, "period": 60 } }
   ],
   // CHALLENGE_KEY is a secret: `wrangler secret put CHALLENGE_KEY` in production, `.dev.vars` locally (see README).
   "vars": {
