@@ -1,18 +1,29 @@
 import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import { SYNC_CONFIGURED } from '../lib/sync-api';
 import type { ProgressStyle } from '../lib/types';
+import { BackupSection } from './BackupSection';
 import { TravelledSwatch } from './HighlightSwatches';
 import { InstallAppSection } from './InstallAppSection';
+import { PrivacyDetails } from './PrivacyDetails';
 
 function ExternalLink({ href, children }: { href: string; children: string }) {
   return <a className="underline" href={href} target="_blank" rel="noreferrer">{children}</a>;
 }
 
+/** The Progress heading: where focus goes if the reset confirmation's button has gone when it closes. */
+export const PROGRESS_HEADING_ID = 'progress-heading';
+
 interface SettingsViewProps {
-  onResetRequest: () => void;
+  /** "Reset progress" was pressed: confirm first, then return focus to `button`. */
+  onResetRequest: (button: HTMLButtonElement) => void;
   install: InstallPromptController;
   hasProgress: boolean;
   progressStyle: ProgressStyle;
   onProgressStyleChange: (style: ProgressStyle) => void;
+  /** Backup & sync is in this build and this browser can use passkeys. */
+  backupAvailable: boolean;
+  /** Backup & sync is on, so the install section can say how to restore the backup in the Home Screen app. */
+  backedUp: boolean;
 }
 
 const PROGRESS_STYLE_OPTIONS: ReadonlyArray<{ value: ProgressStyle; label: string; description: string }> = [
@@ -53,27 +64,41 @@ function ProgressStyleSetting({ value, onChange }: { value: ProgressStyle; onCha
   );
 }
 
-export function SettingsView({ onResetRequest, install, hasProgress, progressStyle, onProgressStyleChange }: SettingsViewProps) {
+export function SettingsView({ onResetRequest, install, hasProgress, progressStyle, onProgressStyleChange, backupAvailable, backedUp }: SettingsViewProps) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-10">
       <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <div>
-          <h2 className="text-lg font-semibold">Progress</h2>
+          <h2 id={PROGRESS_HEADING_ID} tabIndex={-1} className="rounded text-lg font-semibold outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+            Progress
+          </h2>
           <div className="mt-3 flex flex-wrap gap-3">
-            <button onClick={onResetRequest} className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
+            <button onClick={(event) => onResetRequest(event.currentTarget)} className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
           </div>
         </div>
 
+        {/* Absent from builds without a backup server, so they read exactly as before. */}
+        {SYNC_CONFIGURED && <BackupSection hasProgress={hasProgress} standalone={install.standalone} />}
+
         <ProgressStyleSetting value={progressStyle} onChange={onProgressStyleChange} />
 
-        <InstallAppSection install={install} hasProgress={hasProgress} />
+        <InstallAppSection install={install} hasProgress={hasProgress} backup={backupAvailable ? (backedUp ? 'on' : 'off') : null} />
 
         <div>
           <h2 className="text-lg font-semibold">About</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Tube Tracker uses a local graph model of London transport stations and sections. Your progress is stored only on
-            this device (in IndexedDB), and the app keeps working offline after its first successful load.
-          </p>
+          {backupAvailable ? (
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Tube Tracker uses a local graph model of London transport stations and sections. Your progress is stored on this device. If you turn on
+              Backup &amp; sync, a copy is also kept on Tube Tracker’s server so you can restore it. The app keeps working offline after its first
+              successful load.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Tube Tracker uses a local graph model of London transport stations and sections. Your progress is stored only on
+              this device (in IndexedDB), and the app keeps working offline after its first successful load.
+            </p>
+          )}
+          {backupAvailable && <PrivacyDetails />}
         </div>
 
         <div>

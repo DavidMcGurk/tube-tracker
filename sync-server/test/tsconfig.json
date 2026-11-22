@@ -1,0 +1,8 @@
+{
+  // Tests run inside the Workers runtime (vitest-pool-workers), so they use the Worker's types plus cloudflare:test.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
+  },
+  "include": ["./**/*.ts", "../src"]
+}

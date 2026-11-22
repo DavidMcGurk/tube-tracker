@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getStationById } from '../data/network';
 import type { RouteSelection } from '../hooks/useRouteSelection';
 import { formatMapZoom } from '../lib/map-zoom';
@@ -11,11 +11,23 @@ import { useMapZoomGestures } from '../map/useMapZoomGestures';
 import { useReferenceMapSvg } from '../map/useReferenceMapSvg';
 import { MapToolbar } from './MapToolbar';
 import { RouteActionBar } from './RouteActionBar';
+import { UndoBar, type UndoBarProps } from './UndoBar';
+
+/**
+ * Where keyboard focus goes after the bar under the map is swapped, since the focused button goes with the old bar:
+ * Undo after recording, Record after undoing, the map itself once the undo bar is dismissed.
+ */
+export type MapFocusRequest = 'undo' | 'record' | 'map';
 
 interface MapViewProps {
   progress: Progress;
   selection: RouteSelection;
   onRecordRoute: (route: RouteResult) => void;
+  /** While the journey just recorded can be undone: shown where the route actions are, when they aren't. */
+  undo: UndoBarProps | null;
+  focusRequest: MapFocusRequest | null;
+  /** The request was carried out (or can't be), so it isn't repeated. */
+  onFocusDone: () => void;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   resolvedTheme: ResolvedTheme;
@@ -23,7 +35,7 @@ interface MapViewProps {
   progressStyle: ProgressStyle;
 }
 
-export function MapView({ progress, selection, onRecordRoute, fullscreen, onToggleFullscreen, resolvedTheme, onToggleTheme, progressStyle }: MapViewProps) {
+export function MapView({ progress, selection, onRecordRoute, undo, focusRequest, onFocusDone, fullscreen, onToggleFullscreen, resolvedTheme, onToggleTheme, progressStyle }: MapViewProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const zoomReadoutRef = useRef<HTMLSpanElement | null>(null);
   const { markup, error: mapLoadError } = useReferenceMapSvg();
@@ -75,6 +87,12 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
     onCommit: viewport.commitZoom
   });
 
+  useLayoutEffect(() => {
+    if (focusRequest !== 'map') return;
+    viewportRef.current?.focus({ preventScroll: true });
+    onFocusDone();
+  }, [focusRequest, onFocusDone]);
+
   const inspectedStation = inspectedStationId ? getStationById(inspectedStationId) : undefined;
   const canClear = selectedStationIds.length > 0 || inspectedStationId !== null;
   const handleClear = () => {
@@ -108,6 +126,8 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           onScroll={viewport.handleScroll}
           role="region"
           aria-label="Interactive London transport map. Tap a start and an end station to choose a journey; drag to pan; pinch to zoom."
+          // Focusable from script only: where focus goes when the undo bar under it is dismissed.
+          tabIndex={-1}
           dangerouslySetInnerHTML={{ __html: markup }}
         />
         {inspectedStation && (
@@ -130,7 +150,7 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
           <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">Unable to load the network map: {mapLoadError}</p>
         )}
 
-        {activeRoute && (
+        {activeRoute ? (
           <RouteActionBar
             selectedStationIds={selectedStationIds}
             routeOptions={selection.routeOptions}
@@ -142,7 +162,11 @@ export function MapView({ progress, selection, onRecordRoute, fullscreen, onTogg
             onClear={handleClear}
             onChooseRoute={selection.chooseRoute}
             onToggleChooser={selection.toggleChooser}
+            focusOnMount={focusRequest === 'record'}
+            onFocused={onFocusDone}
           />
+        ) : (
+          undo && <UndoBar {...undo} focusOnMount={focusRequest === 'undo'} onFocused={onFocusDone} />
         )}
       </div>
     </main>

@@ -122,18 +122,33 @@ export function isStreetWalkOnly(route: RouteResult) {
   return getRiddenLinks(route) === null;
 }
 
-/** Returns the same object when the route adds nothing new, so callers can compare by reference. */
-export function addRouteToProgress(progress: Progress, route: RouteResult): Progress {
+/**
+ * Every id a journey touches, in the shape of a progress record: its track sections, the walks within its ridden
+ * part, the stations it went through the gates of and the stations it changed at. Nothing for a walk along the street
+ * only. Recording adds exactly these, and backup sends all of them even when they're already recorded on this device,
+ * because a reset made on another device may not have arrived yet (see docs/sync-design.md).
+ */
+export function getRouteItems(route: RouteResult): Progress {
   const ridden = getRiddenLinks(route);
-  if (!ridden) return progress;
+  if (!ridden) return EMPTY_PROGRESS;
 
   const { enteredOrExited, changedAt } = getJourneyStations(route);
-  const riddenWalkIds = route.links.slice(ridden.first, ridden.last + 1).flatMap((link) => (link.type === 'walk' ? [link.id] : []));
+  return {
+    travelledSegmentIDs: route.sections.map((section) => section.id),
+    walkedLinkIDs: route.links.slice(ridden.first, ridden.last + 1).flatMap((link) => (link.type === 'walk' ? [link.id] : [])),
+    stationsEnteredOrExitedIDs: enteredOrExited,
+    stationsChangedAtIDs: changedAt
+  };
+}
+
+/** Returns the same object when the route adds nothing new, so callers can compare by reference. */
+export function addRouteToProgress(progress: Progress, route: RouteResult): Progress {
+  const items = getRouteItems(route);
   const next: Progress = {
-    travelledSegmentIDs: appendUnique(progress.travelledSegmentIDs, route.sections.map((section) => section.id)),
-    walkedLinkIDs: appendUnique(progress.walkedLinkIDs, riddenWalkIds),
-    stationsEnteredOrExitedIDs: appendUnique(progress.stationsEnteredOrExitedIDs, enteredOrExited),
-    stationsChangedAtIDs: appendUnique(progress.stationsChangedAtIDs, changedAt)
+    travelledSegmentIDs: appendUnique(progress.travelledSegmentIDs, items.travelledSegmentIDs),
+    walkedLinkIDs: appendUnique(progress.walkedLinkIDs, items.walkedLinkIDs),
+    stationsEnteredOrExitedIDs: appendUnique(progress.stationsEnteredOrExitedIDs, items.stationsEnteredOrExitedIDs),
+    stationsChangedAtIDs: appendUnique(progress.stationsChangedAtIDs, items.stationsChangedAtIDs)
   };
   const unchanged = (Object.keys(next) as Array<keyof Progress>).every((field) => next[field] === progress[field]);
   return unchanged ? progress : next;

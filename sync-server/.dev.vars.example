@@ -1,0 +1,7 @@
+# Local development only. Copy to .dev.vars (git-ignored): `cp .dev.vars.example .dev.vars`.
+# These override the production vars in wrangler.jsonc so passkeys work with the app on http://localhost:5173.
+CHALLENGE_KEY=local-dev-challenge-key-not-a-secret-0123456789
+RP_ID=localhost
+EXPECTED_ORIGINS=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:5173
+RATE_LIMITS=off

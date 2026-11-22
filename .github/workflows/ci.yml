@@ -24,15 +24,30 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sync-server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Install sync server dependencies
+        run: npm ci --prefix sync-server
+
       - name: Unit tests
         run: npm test
 
+      - name: Sync server tests
+        run: npm test --prefix sync-server
+
+      - name: Sync server type-check
+        run: npm run typecheck --prefix sync-server
+
       - name: Type-check and build
         run: npm run build
+
+      - name: Type-check end-to-end tests
+        run: npx tsc -p e2e
 
   e2e:
     name: End-to-end tests (phone, tablet, laptop and widescreen)
@@ -47,9 +62,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sync-server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      # The backup specs run the sync server under `wrangler dev` (see playwright.config.ts).
+      - name: Install sync server dependencies
+        run: npm ci --prefix sync-server
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit

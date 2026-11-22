@@ -1,10 +1,21 @@
 import type { InstallPromptController } from '../hooks/useInstallPrompt';
 import { IosInstallSteps, isIosPlatform } from './InstallSteps';
 
+interface InstallAppSectionProps {
+  install: InstallPromptController;
+  hasProgress: boolean;
+  /** Backup & sync, when this build and browser have it: the Home Screen app gets its journeys by restoring. */
+  backup: 'on' | 'off' | null;
+}
+
 /** Settings fallback for installing the app, available even after the pop-up was dismissed. */
-export function InstallAppSection({ install, hasProgress }: { install: InstallPromptController; hasProgress: boolean }) {
+export function InstallAppSection({ install, hasProgress, backup }: InstallAppSectionProps) {
   if (install.standalone) return null;
   const ios = isIosPlatform(install.platform);
+  // How the Home Screen app gets the journeys: there's only a backup to restore once Backup & sync (above) is on.
+  const restoreNote = backup === 'on'
+    ? ' until you restore your backup there'
+    : backup === 'off' ? ' unless you turn on Backup & sync above, then restore your backup in the app' : '';
 
   let body;
   if (install.canInstallNatively) {
@@ -34,7 +45,7 @@ export function InstallAppSection({ install, hasProgress }: { install: InstallPr
       <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
         Add Tube Tracker to your home screen to open it full screen and use it offline.
         {ios && (hasProgress
-          ? ' On iPhone and iPad the Home Screen app keeps its own data, so journeys recorded in Safari won’t appear in it.'
+          ? ` On iPhone and iPad the Home Screen app keeps its own data, so journeys recorded in Safari won’t appear in it${restoreNote}.`
           : ' It also protects your progress: Safari can clear a website’s saved data after 7 days without a visit.')}
       </p>
       <div className="mt-3">{body}</div>

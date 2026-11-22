@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { collectErrors, openMap, selectStation, stationLabel } from './helpers';
+import { collectErrors, isTouchProject, openMap, selectStation, stationLabel } from './helpers';
 
 /** Interaction behaviours, checked on one desktop (mouse) and one phone (touch, WebKit) project. */
 test.beforeEach(({ }, testInfo) => {
@@ -18,6 +18,126 @@ async function recordJourney(page: Page, testInfo: Parameters<typeof selectStati
   await page.locator('.route-action-bar').getByRole('button', { name: /record route|already explored/i }).click();
   await expect(page.locator('.route-action-bar')).toBeHidden();
 }
+
+const undoBar = (page: Page) => page.locator('[data-undo-bar]');
+
+/** Undo ignores presses in its first 800 ms (UNDO_GUARD_MS: a double tap on “Record route” would land on it). */
+const waitOutUndoGuard = (page: Page) => page.waitForTimeout(900);
+
+test('a recorded journey can be undone: only what it added goes, and its stations are selected again', async ({ page }, testInfo) => {
+  const errors = collectErrors(page);
+  await openMap(page);
+  await recordJourney(page, testInfo, 'paddington', 'waterloo');
+  const bar = undoBar(page);
+  await expect(bar).toHaveAccessibleName('Journey recorded');
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+
+  await waitOutUndoGuard(page);
+  await bar.getByRole('button', { name: 'Undo' }).click();
+  await expect(bar).toBeHidden();
+  await expect(page.locator('[data-app-announcements]')).toHaveText('Journey removed');
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'neutral');
+  await expect(page.locator('#app-travelled-sections path')).toHaveCount(0);
+  // Its start and end are selected again, so the right route can be picked straight away.
+  const routeBar = page.locator('.route-action-bar');
+  await expect(routeBar).toContainText('Paddington → Waterloo');
+
+  // Record it again and keep it: dismissing the bar ends the window.
+  await routeBar.getByRole('button', { name: 'Record route' }).click();
+  await expect(bar).toBeVisible();
+  await bar.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(bar).toBeHidden();
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+
+  // A longer journey over the same line: undoing it leaves the first one as it was.
+  await recordJourney(page, testInfo, 'paddington', 'elephant_castle');
+  await expect(stationLabel(page, 'elephant_castle')).toHaveAttribute('data-app-state', 'entered');
+  await waitOutUndoGuard(page);
+  await bar.getByRole('button', { name: 'Undo' }).click();
+  await expect(bar).toBeHidden();
+  await expect(stationLabel(page, 'elephant_castle')).toHaveAttribute('data-app-state', 'neutral');
+  for (const stationId of ['paddington', 'waterloo']) await expect(stationLabel(page, stationId)).toHaveAttribute('data-app-state', 'entered');
+  await routeBar.getByRole('button', { name: 'Clear selection' }).click();
+
+  // Recording an already-explored journey ends the window of the one before, and offers no undo of its own.
+  await recordJourney(page, testInfo, 'bank', 'stratford');
+  await expect(bar).toBeVisible();
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+  await routeBar.getByRole('button', { name: 'Already explored' }).click();
+  await routeBar.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(routeBar).toBeHidden();
+  await expect(bar).toHaveCount(0);
+  await expect(stationLabel(page, 'stratford')).toHaveAttribute('data-app-state', 'entered');
+  expect(errors).toEqual([]);
+});
+
+test('focus moves with the bar under the map: Record → Undo → Record again, and Dismiss → the map', async ({ page }, testInfo) => {
+  const errors = collectErrors(page);
+  await openMap(page);
+  // The laptop uses the keyboard (Enter on the focused button); the phone taps.
+  const press = async (control: Locator) => {
+    if (isTouchProject(testInfo)) {
+      await control.tap();
+    } else {
+      await control.focus();
+      await page.keyboard.press('Enter');
+    }
+  };
+  const routeBar = page.locator('.route-action-bar');
+  const record = routeBar.getByRole('button', { name: 'Record route' });
+  const bar = undoBar(page);
+  const undo = bar.getByRole('button', { name: 'Undo' });
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+
+  // Recording swaps the route actions for the undo bar: focus goes to Undo, not back to the top of the page.
+  await press(record);
+  await expect(bar).toBeVisible();
+  await expect(undo).toBeFocused();
+
+  // Undoing brings the route actions back, ready to record the right route.
+  await waitOutUndoGuard(page);
+  await press(undo);
+  await expect(bar).toBeHidden();
+  await expect(record).toBeFocused();
+
+  // Dismissing keeps the journey; focus goes to the map the bar was under.
+  await press(record);
+  await expect(undo).toBeFocused();
+  await press(bar.getByRole('button', { name: 'Dismiss' }));
+  await expect(bar).toBeHidden();
+  await expect(page.getByRole('region', { name: /^Interactive London transport map/ })).toBeFocused();
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+  expect(errors).toEqual([]);
+});
+
+test('the undo bar goes by itself after five minutes, keeping the journey', async ({ page }, testInfo) => {
+  const errors = collectErrors(page);
+  await page.clock.install();
+  await openMap(page);
+  await recordJourney(page, testInfo, 'paddington', 'waterloo');
+  const bar = undoBar(page);
+  await expect(bar).toBeVisible();
+  // Out of sight on another tab, the window keeps running.
+  await page.getByRole('navigation').getByRole('button', { name: 'Statistics' }).click();
+  await page.clock.fastForward('04:50');
+  await page.getByRole('navigation').getByRole('button', { name: 'Map' }).click();
+  await expect(bar).toBeVisible();
+
+  await page.clock.fastForward('00:11');
+  await expect(bar).toBeHidden();
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+  const undone = await page.evaluate(`(async () => (await (await import('/src/lib/storage.ts')).undoLastJourney()).outcome)()`);
+  expect(undone).toBe('expired');
+
+  // Nor does it come back after a reload.
+  await page.reload();
+  await openMap(page);
+  await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
+  await expect(bar).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
 
 test('a chosen alternative keeps its number after hiding the alternatives', async ({ page }, testInfo) => {
   const errors = collectErrors(page);
@@ -47,9 +167,28 @@ test('selection and recorded progress survive switching tabs; reset clears them'
   await expect(stationLabel(page, 'paddington')).toHaveAttribute('data-app-state', 'entered');
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Reset progress' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Reset progress' }).click();
+  const resetButton = page.getByRole('button', { name: 'Reset progress' });
+  await resetButton.click();
+  // A modal dialog: Cancel first, focus stays inside, Escape closes it and focus goes back to the button.
+  const resetDialog = page.getByRole('dialog', { name: 'Reset all progress?' });
+  await expect(resetDialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  if (!isTouchProject(testInfo)) {
+    // The page behind is inert: Tab moves between the dialog's buttons (and the browser's own controls), never behind it.
+    for (let step = 0; step < 4; step++) {
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(() => {
+        const focused = document.activeElement;
+        return !focused || focused === document.body || focused.closest('dialog') !== null;
+      }), `focus after ${step + 1} Tab presses`).toBe(true);
+    }
+  }
+  await page.keyboard.press('Escape');
+  await expect(resetDialog).toBeHidden();
+  await expect(resetButton).toBeFocused();
+  await resetButton.click();
+  await resetDialog.getByRole('button', { name: 'Reset progress' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(resetButton).toBeFocused();
   await page.getByRole('button', { name: 'Statistics' }).click();
   await expect(page.getByRole('progressbar', { name: 'Whole network track travelled' })).toHaveAttribute('aria-valuenow', '0');
 });

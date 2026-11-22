@@ -268,6 +268,7 @@ test('station ticks are thin until a travelled section of their line reaches the
 
   // Without thinning (the band style), every tick gets its own transform back.
   await page.evaluate(async () => {
+    // @ts-expect-error Vite serves the app's modules at this path in the browser.
     const ticksModule = await import('/src/map/station-ticks.ts');
     ticksModule.applyTickProgress(document.querySelector('.tube-map-viewport svg')!, [], null);
   });

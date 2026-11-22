@@ -88,7 +88,7 @@ body,
   min-height: 100vh;
 }
 
-.app-shell > :is(header, nav, main) {
+.app-shell > :is(header, nav, main, .sync-notice-slot) {
   padding-right: calc(1rem + env(safe-area-inset-right));
   padding-left: calc(1rem + env(safe-area-inset-left));
 }
@@ -114,20 +114,6 @@ button:disabled {
   left: 50%;
   width: min(calc(100% - 2rem), 40rem);
   transform: translateX(-50%);
-}
-
-.reset-confirmation-backdrop {
-  position: fixed;
-  z-index: 200;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgb(15 23 42 / 65%);
-}
-
-.reset-confirmation-dialog {
-  width: min(100%, 28rem);
 }
 
 /* ---------------------------------------------------------------- Map layout */
@@ -169,10 +155,12 @@ button:disabled {
     width: 100%;
     height: 100vh;
     height: 100dvh;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    /* Header, tabs, the signed-out notice (0 tall when there isn't one) and the map. */
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     overflow: hidden;
 
     & > main.map-main {
+      grid-row: 4;
       box-sizing: border-box;
       width: 100%;
       height: 100%;
@@ -188,7 +176,7 @@ button:disabled {
       height: 100%;
     }
 
-    & :is(.map-toolbar, .route-action-bar) {
+    & :is(.map-toolbar, .route-action-bar, .undo-bar) {
       flex: none;
     }
 
@@ -204,7 +192,10 @@ button:disabled {
   }
 }
 
-/* Phones (including phones held sideways): the route actions float above the map as a bottom sheet. */
+/*
+ * Phones (including phones held sideways): the route actions float above the map as a bottom sheet, and so does the
+ * undo bar that takes their place once a journey is recorded.
+ */
 @media (max-width: 640px), (max-height: 559px) {
   .tube-map-viewport {
     max-height: min(66svh, 720px);
@@ -214,20 +205,32 @@ button:disabled {
     }
   }
 
-  .route-action-bar {
+  :is(.route-action-bar, .undo-bar) {
     position: fixed;
     z-index: 110;
     right: calc(0.75rem + env(safe-area-inset-right));
     bottom: calc(0.75rem + env(safe-area-inset-bottom));
     left: calc(0.75rem + env(safe-area-inset-left));
-    justify-content: stretch;
     margin: 0;
-    padding: 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 1rem;
     background: rgb(255 255 255 / 94%);
     box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
     backdrop-filter: blur(12px);
+  }
+
+  html[data-theme='dark'] :is(.route-action-bar, .undo-bar) {
+    border-color: #334155;
+    background: rgb(15 23 42 / 94%);
+  }
+
+  .undo-bar {
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+  }
+
+  .route-action-bar {
+    justify-content: stretch;
+    padding: 0.75rem;
     max-height: 45svh;
     overflow-y: auto;
 
@@ -247,18 +250,13 @@ button:disabled {
     }
   }
 
-  html[data-theme='dark'] .route-action-bar {
-    border-color: #334155;
-    background: rgb(15 23 42 / 94%);
-  }
-
   .route-options {
     max-height: 28svh;
   }
 
   /*
-   * Leave room for the floating route bar (its height is measured into --tt-route-bar-height): the page and the map
-   * can scroll far enough to bring everything above it, and station details float just above it.
+   * Leave room for the floating route bar or undo bar (its height is measured into --tt-route-bar-height): the page and
+   * the map can scroll far enough to bring everything above it, and station details float just above it.
    */
   .app-shell[data-route-bar='true'] {
     & > main.map-main {

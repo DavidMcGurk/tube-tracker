@@ -1,0 +1,50 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Backup & sync API for Tube Tracker (docs/sync-design.md). Workers Free plan only: one Worker, one D1 database,
+  // one daily Cron Trigger and two Rate Limiting bindings. Going over a free limit makes requests fail until the next
+  // day; it is never billed.
+  "name": "tube-tracker-sync",
+  "main": "src/index.ts",
+  // Supported by both wrangler 4.166's runtime and the older one bundled with @cloudflare/vitest-pool-workers 0.23.
+  "compatibility_date": "2026-08-15",
+  "workers_dev": true,
+  // One public URL only; the app is the only client.
+  "preview_urls": false,
+  "send_metrics": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      // Created by the first deploy (automatic provisioning) on 2026-11-22.
+      "database_name": "tube-tracker-sync",
+      "database_id": "1c6f944e-3fd9-4b22-8e2b-75f6695440a3",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Errors only (see src/http.ts): per-request invocation logs are off, so no request URLs, headers or IP addresses
+  // are kept. Logs are free; ingestion stops at the daily allowance.
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  // Daily cleanup (src/cleanup.ts). Away from 00:00 UTC, when the free daily quotas reset.
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  // Coarse CPU and D1 guards, counted per Cloudflare location (approximate by design). They don't protect the daily
+  // request budget: a blocked request still counts. The code allows requests if a binding is missing or fails, and
+  // RATE_LIMITS=off (local and e2e only) turns them off. namespace_id is any number unique within the account.
+  "ratelimits": [
+    { "name": "AUTH_RATE_LIMITER", "namespace_id": "8701", "simple": { "limit": 20, "period": 60 } },
+    { "name": "SYNC_RATE_LIMITER", "namespace_id": "8702", "simple": { "limit": 10, "period": 60 } }
+  ],
+  // CHALLENGE_KEY is a secret: `wrangler secret put CHALLENGE_KEY` in production, `.dev.vars` locally (see README).
+  "vars": {
+    "RP_ID": "davidmcgurk.github.io",
+    "EXPECTED_ORIGINS": "https://davidmcgurk.github.io",
+    "ALLOWED_ORIGINS": "https://davidmcgurk.github.io",
+    "MAX_USERS": "2500"
+  }
+}

@@ -5,7 +5,8 @@ import {
   expectWithinViewport,
   openMap,
   screenshotPath,
-  selectStation
+  selectStation,
+  stationLabel
 } from './helpers';
 
 /**
@@ -35,6 +36,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       await recordButton.click();
       await expect(routeBar).toBeHidden();
+      // The undo bar takes the route actions' place, within reach and with full-size buttons.
+      const undoBar = page.locator('[data-undo-bar]');
+      await expect(undoBar).toBeVisible();
+      await expectWithinViewport(page, undoBar, 'undo bar');
+      for (const control of await undoBar.getByRole('button').all()) {
+        await expectWithinViewport(page, control, `undo bar ${await control.textContent()} button`);
+        const box = await control.boundingBox();
+        expect(Math.min(box!.width, box!.height), 'undo bar buttons are at least 44px each way').toBeGreaterThanOrEqual(44);
+      }
+      await expectNoHorizontalPageOverflow(page);
+      await page.screenshot({ path: screenshotPath(testInfo, `${colorScheme}-2b-undo-bar`) });
 
       await page.getByRole('button', { name: 'Statistics' }).click();
       const networkTrack = page.getByRole('progressbar', { name: 'Whole network track travelled' });
@@ -47,6 +59,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('button', { name: 'Reset progress' })).toBeVisible();
       await expectNoHorizontalPageOverflow(page);
       await page.screenshot({ path: screenshotPath(testInfo, `${colorScheme}-4-settings`), fullPage: true });
+
+      // Reset asks first, in a modal dialog with Cancel focused; focus goes back to the button afterwards.
+      const resetButton = page.getByRole('button', { name: 'Reset progress' });
+      await resetButton.click();
+      const resetDialog = page.getByRole('dialog', { name: 'Reset all progress?' });
+      await expect(resetDialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await expectWithinViewport(page, resetDialog, 'reset dialog');
+      await expectNoHorizontalPageOverflow(page);
+      await page.screenshot({ path: screenshotPath(testInfo, `${colorScheme}-4b-reset-dialog`) });
+      await resetDialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(resetDialog).toBeHidden();
+      await expect(resetButton).toBeFocused();
 
       await page.getByRole('button', { name: 'Map' }).click();
       await expect(page.locator('.tube-map-viewport svg')).toBeVisible();
@@ -71,6 +95,47 @@ test('a phone held sideways keeps the map usable with a route and its alternativ
   expect(mapHeight).toBeGreaterThan(150);
   await expectWithinViewport(page, page.locator('.route-action-bar').getByRole('button', { name: 'Hide alternative routes' }), 'hide alternatives button');
   await page.screenshot({ path: screenshotPath(testInfo, 'landscape-alternatives') });
+});
+
+test('a double tap on “Record route” keeps the journey, though Undo takes its place', async ({ page }, testInfo) => {
+  test.skip(!['phone-393', 'iphone-webkit'].includes(testInfo.project.name), 'phones, where the undo bar floats where the route actions were');
+  const errors = collectErrors(page);
+  await openMap(page);
+  const routeBar = page.locator('.route-action-bar');
+  const undoBar = page.locator('[data-undo-bar]');
+  const buttonAt = (x: number, y: number) => page.evaluate(([px, py]) => document.elementFromPoint(px!, py!)?.closest('button')?.textContent ?? null, [x, y]);
+  for (const gap of [150, 500]) {
+    await page.evaluate(`(async () => (await import('/src/lib/storage.ts')).resetStoredProgress())()`);
+    await expect(undoBar).toHaveCount(0);
+    // Kennington to Oval has one route, so there's no “alternative routes” row: Undo appears right where Record was.
+    await selectStation(page, testInfo, 'kennington');
+    await selectStation(page, testInfo, 'oval');
+    const record = routeBar.getByRole('button', { name: 'Record route' });
+    await expect(record).toBeVisible();
+    await expect(routeBar.getByRole('button', { name: /alternative routes/ })).toHaveCount(0);
+    const box = (await record.boundingBox())!;
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+
+    const firstTap = Date.now();
+    await page.touchscreen.tap(x, y);
+    await page.waitForTimeout(gap);
+    await expect.poll(() => buttonAt(x, y), `the second tap (${gap} ms later) lands on Undo`).toBe('Undo');
+    await page.touchscreen.tap(x, y);
+    expect(Date.now() - firstTap, 'both taps fall within the guard').toBeLessThan(800);
+
+    await page.waitForTimeout(300);
+    await expect(undoBar).toBeVisible();
+    await expect(undoBar).toHaveAccessibleName('Journey recorded');
+    await expect(stationLabel(page, 'oval')).toHaveAttribute('data-app-state', 'entered');
+    await expect(page.locator('[data-app-announcements]')).toHaveText('Journey recorded');
+  }
+
+  // A deliberate Undo, a moment later, still works.
+  await page.waitForTimeout(900);
+  await undoBar.getByRole('button', { name: 'Undo' }).tap();
+  await expect(undoBar).toBeHidden();
+  await expect(stationLabel(page, 'oval')).toHaveAttribute('data-app-state', 'neutral');
+  expect(errors).toEqual([]);
 });
 
 test('the header lines up with the tabs and the map', async ({ page }) => {
