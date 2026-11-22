@@ -174,11 +174,11 @@ Deletes are explicit statements in one `batch`; nothing relies on foreign-key ca
 
 - **The binding limit** is Workers Free's 100,000 requests a day, shared by the whole account and reset at 00:00 UTC. Every invocation counts, including preflights and 4xx/429.
   - WebKit caches preflights for at most 600 s, so a sync after more than 10 minutes usually costs 2 requests.
-  - The target is about 25 requests per active user a day, roughly 4,000 daily active users.
+  - The target is about 25–50 requests per active user a day (every return to the app checks for changes), roughly 2,000–4,000 daily active users.
 - **D1 is not the binding cost:** one row is written per sync that changes something, plus session and credential updates.
 - **Rate Limiting binding** (if it's available on the free plan; verify, otherwise document):
   - unauthenticated `/v1/auth/*`, keyed by IPv4 address or IPv6 /64: 20 a minute (a coarse CPU guard);
-  - `/v1/sync`, keyed by user: 10 per 60 s.
+  - `/v1/sync`, keyed by user: 30 per 60 s. It's shared by all of a user's sessions, and each one checks for changes whenever it comes back (at most about 12 a minute). A sync that changes nothing reads D1 but writes nothing.
   - These protect D1 and CPU, not the request budget. Nothing inside a Worker can protect that.
   - `RATE_LIMITS=off` (local and e2e only) disables them.
 - **Caps:**
@@ -243,7 +243,9 @@ Deletes are explicit statements in one `batch`; nothing relies on foreign-key ca
 - **Ownership:** a module singleton. `startSync()` is called once from `main.tsx`, next to `initInstallPromptCapture()`. It's idempotent, reads the account from IndexedDB, and owns every timer and listener. Hooks only subscribe.
 - **Triggers:**
   - A local change (debounced 1.5 s).
-  - App start, `visibilitychange` to visible, and `online`, only if the outbox has unsent rows or the last successful sync was at least 2 minutes ago.
+  - App start, `visibilitychange` to visible, window `focus` (on a computer, switching between windows that are both on screen never changes visibility) and `online`. These sync if the outbox has unsent rows, and otherwise fetch unless the last successful sync was under 5 seconds ago, so coming back to the app shows changes made on other devices. The short gap stops quick switching, and tabs (which share it), from fetching the same thing repeatedly. Each browser's storage has its own, so one session can check about 12 times a minute at most, under the server's 30 syncs a minute per user.
+  - Coming back (`visible`) and `focus` run after a 1.5 s pause, and leaving again during it (hidden or `blur`) cancels the check. The window or app being left sends anything ready at once, so the pause lets that reach the server before the check. Several of these events during the pause make one check.
+  - Window `blur` with unsent rows (or a debounce waiting): cancel the debounce and sync now. Unlike hidden, it doesn't end the undo window, as the bar is still on screen.
   - `visibilitychange` to hidden with unsent rows: cancel the debounce and sync now (best effort). A journey still in its undo window has its window ended first (see Timed undo), so it's sent too.
   - "Back up now", which also re-queues held rows as one fresh `add`.
   - There is **no periodic poll**.
@@ -254,7 +256,7 @@ Deletes are explicit statements in one `batch`; nothing relies on foreign-key ca
   - Apply each response.
   - Repeat while unsent rows remain, up to **5 requests per run**. Stop early if a response didn't remove the rows just sent.
 - **Failures:**
-  - Network errors, 5xx, 409 `busy` and 429 back off exponentially with jitter: 5 s up to 5 min. `Retry-After` is honoured, capped at 24 h. Becoming visible or coming online resets the backoff, unless a `Retry-After` is still running.
+  - Network errors, 5xx, 409 `busy` and 429 back off exponentially with jitter: 5 s up to 5 min. `Retry-After` is honoured, capped at 24 h. Becoming visible or coming online resets the backoff, unless a `Retry-After` is still running. Focus doesn't (it can change many times a minute on a computer). A coming-back or focus check, or `online`, adds no request while a retry is waiting, and no run (other than the retry itself and "Back up now") sends while a `Retry-After` is running, even if it was queued before the `Retry-After` began.
   - 409 `clock_skew`: shift and retry (see Clocks).
   - 400 or 413 for the whole request: nothing is dropped. Record `lastError`. On 413, halve the batch.
   - Other non-retryable 4xx: `lastError` "Couldn't back up. Updating the app may fix this.", retried only on the next start or "Back up now".

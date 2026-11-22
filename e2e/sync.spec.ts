@@ -327,7 +327,7 @@ test.describe('Backup & sync', () => {
     expectNoErrors(a, b);
   });
 
-  test('a journey recorded on one device reaches another with “Back up now” and when the app comes back', async ({ device }, testInfo) => {
+  test('a journey recorded on one device reaches another with “Back up now”, when the app comes back and when it gets the focus', async ({ device }, testInfo) => {
     const a = await device('A');
     await openApp(a);
     await turnOnBackup(a, testInfo);
@@ -347,13 +347,25 @@ test.describe('Backup & sync', () => {
     await recordOnMap(a, 'bank', 'stratford', testInfo);
     await expectBackedUp(a);
     const both = [...new Set([...first, ...(await routeSections(a, 'bank', 'stratford'))])].sort();
-    // B comes back to the app a few minutes after its last sync.
+    // B comes back to the app 10 seconds after its last sync (it checks again after 5).
     await b.page.evaluate(`(async () => {
       const storage = await import('/src/lib/storage.ts');
-      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 3 * 60 * 1000 });
+      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 10_000 });
       document.dispatchEvent(new Event('visibilitychange'));
     })()`);
     await expect.poll(() => travelled(b)).toEqual(both);
+
+    // Windows side by side on a computer: record in A, close its undo bar, then click straight into B's window (10
+    // seconds after B's last sync). A sends as it loses the focus, before B checks.
+    await b.page.evaluate(`(async () => {
+      const storage = await import('/src/lib/storage.ts');
+      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 10_000 });
+    })()`);
+    await recordOnMap(a, 'brixton', 'victoria', testInfo);
+    await a.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await b.page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const all = [...new Set([...both, ...(await routeSections(a, 'brixton', 'victoria'))])].sort();
+    await expect.poll(() => travelled(b)).toEqual(all);
     expectNoErrors(a, b);
   });
 

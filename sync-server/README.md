@@ -60,7 +60,7 @@ The root project's Vitest excludes `sync-server/**`; this package has its own de
 | `CHALLENGE_KEY` | **secret** | 32 random bytes | HMAC key for WebAuthn challenges; at least 32 characters. Without it the options endpoints answer 500. |
 | `DB` | D1 | `tube-tracker-sync` | The database. |
 | `AUTH_RATE_LIMITER` | rate limit | 20 / 60 s | Unauthenticated `/v1/auth/*`, keyed by IPv4 address or IPv6 /64. |
-| `SYNC_RATE_LIMITER` | rate limit | 10 / 60 s | `/v1/sync`, keyed by user. |
+| `SYNC_RATE_LIMITER` | rate limit | 30 / 60 s | `/v1/sync`, keyed by user. |
 
 **Rate limiting on the Free plan:** the [Rate Limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) has been generally available since September 2025, and neither its docs nor the Workers pricing and limits pages list a plan restriction or a price, so it's configured. Limits are approximate and counted per Cloudflare location. They guard CPU and D1, not the 100,000-requests-a-day budget, because a refused request still counts. If the binding is missing or fails, requests are allowed, and `RATE_LIMITS=off` turns it off. If a deploy is ever refused because of the binding, delete the `ratelimits` block from `wrangler.jsonc`; the code works without it.
 

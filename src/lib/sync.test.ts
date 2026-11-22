@@ -16,12 +16,14 @@ import {
   type SyncSummary
 } from './storage';
 import {
+  BACKOFF_MAX_MS,
   BACKOFF_MIN_MS,
   classifyFailure,
   deriveStatus,
   LOCAL_CHANGE_DELAY_MS,
   LOCK_NAME,
   MAX_REQUESTS_PER_RUN,
+  RETURN_CHECK_DELAY_MS,
   STALE_AFTER_MS,
   STATUS_MESSAGES,
   SyncEngine,
@@ -198,12 +200,190 @@ describe('triggers', () => {
 
     setVisibility('hidden');
     setVisibility('visible');
-    await engine.idle();
+    await advance(RETURN_CHECK_DELAY_MS, engine);
     expect(server.requests).toEqual([[]]);
 
     setVisibility('visible');
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('coming back a few seconds after the last sync fetches what another device backed up, after a short pause', async () => {
+    await signIn();
+    const { engine, server, setVisibility } = setup();
+    await started(engine);
+    const here = route('paddington', 'waterloo');
+    await record(engine, here);
+    await advance(LOCAL_CHANGE_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+
+    // This device comes back 10 seconds later. Another device's journey reaches the server during the pause.
+    setVisibility('hidden');
+    vi.setSystemTime(Date.now() + 10_000);
+    setVisibility('visible');
+    await advance(RETURN_CHECK_DELAY_MS - 500, engine);
+    expect(server.requests).toHaveLength(1);
+    const there = route('bank', 'stratford');
+    server.state = applyChange(server.state, { id: 'b-add', type: 'add', at: Date.now(), items: { sections: sectionIds(there) } });
+    await advance(500, engine);
+    expect(server.requests).toEqual([expect.any(Array), []]);
+    expect(sorted((await storedProgress()).travelledSegmentIDs)).toEqual(sorted([...new Set([...sectionIds(here), ...sectionIds(there)])]));
+
+    // Switching straight back again doesn't fetch the same thing twice.
+    setVisibility('hidden');
+    vi.setSystemTime(Date.now() + 2_000);
+    setVisibility('visible');
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(2);
+  });
+
+  it('getting the focus fetches too, for windows side by side on a computer', async () => {
+    await signIn();
+    const { engine, server, window } = setup();
+    await started(engine);
+    server.state = applyChange(server.state, { id: 'b-add', type: 'add', at: Date.now(), items: { sections: [S1] } });
+
+    vi.setSystemTime(Date.now() + 10_000);
+    window.dispatchEvent(new Event('focus'));
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toEqual([[]]);
+    expect((await storedProgress()).travelledSegmentIDs).toEqual([S1]);
+
+    vi.setSystemTime(Date.now() + 2_000);
+    window.dispatchEvent(new Event('focus'));
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('leaving again during the pause cancels the check, so switching straight through fetches nothing', async () => {
+    await signIn();
+    const { engine, server, setVisibility, window } = setup();
+    await started(engine);
+    vi.setSystemTime(Date.now() + 10_000);
+
+    window.dispatchEvent(new Event('focus'));
+    await advance(RETURN_CHECK_DELAY_MS - 1, engine);
+    window.dispatchEvent(new Event('blur'));
+    setVisibility('visible');
+    await advance(RETURN_CHECK_DELAY_MS - 1, engine);
+    setVisibility('hidden');
+    await advance(RETURN_CHECK_DELAY_MS * 2, engine);
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('coming back fires both visibility and focus, in either order: one check, which a failure doesn’t repeat', async () => {
+    await signIn();
+    const { engine, server, setVisibility, window } = setup();
+    await started(engine);
+
+    vi.setSystemTime(Date.now() + 10_000);
+    setVisibility('visible');
+    window.dispatchEvent(new Event('focus'));
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+
+    vi.setSystemTime(Date.now() + 10_000);
+    window.dispatchEvent(new Event('focus'));
+    setVisibility('visible');
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(2);
+
+    // Safari gives the focus before visibility. If the second event arrives while the first one's check is under way
+    // and that check fails, the second waits for the retry (backoff) or for the end of Retry-After.
+    for (const failure of [new SyncNetworkError({ offline: false, timedOut: false }), new SyncHttpError({ status: 429, code: 'rate_limited', retryAfterMs: 60_000 })]) {
+      // Let any retry finish, then come back later than the gap.
+      await advance(BACKOFF_MAX_MS, engine);
+      vi.setSystemTime(Date.now() + 10_000);
+      const before = server.requests.length;
+      let open = () => undefined as void;
+      server.gate = new Promise<void>((resolve) => { open = resolve; });
+      server.failures.push(failure);
+      window.dispatchEvent(new Event('focus'));
+      await vi.advanceTimersByTimeAsync(RETURN_CHECK_DELAY_MS);
+      // The focus check is now waiting for its answer.
+      await vi.waitFor(() => expect(server.requests).toHaveLength(before + 1));
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(RETURN_CHECK_DELAY_MS);
+      server.gate = null;
+      open();
+      await engine.idle();
+      expect(server.requests).toHaveLength(before + 1);
+    }
+  });
+
+  it('a journey recorded while a check is under way waits out the Retry-After that check gets', async () => {
+    await signIn();
+    const { engine, server, window } = setup();
+    await started(engine);
+    let open = () => undefined as void;
+    server.gate = new Promise<void>((resolve) => { open = resolve; });
+    server.failures.push(new SyncHttpError({ status: 429, code: 'rate_limited', retryAfterMs: 60_000 }));
+
+    vi.setSystemTime(Date.now() + 10_000);
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(RETURN_CHECK_DELAY_MS);
+    await vi.waitFor(() => expect(server.requests).toHaveLength(1));
+    // The journey's send is queued behind the check, which is then asked to wait a minute.
+    await record(engine, route('paddington', 'waterloo'));
+    await vi.advanceTimersByTimeAsync(LOCAL_CHANGE_DELAY_MS);
+    server.gate = null;
+    open();
     await engine.idle();
     expect(server.requests).toHaveLength(1);
+
+    await advance(60_000, engine);
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests[1]).toEqual([expect.objectContaining({ type: 'add' })]);
+  });
+
+  it('the focus never resets the backoff, and adds no requests while a retry is waiting', async () => {
+    await signIn();
+    const { engine, server, window } = setup();
+    await started(engine);
+    server.failures.push(new SyncNetworkError({ offline: false, timedOut: false }));
+
+    vi.setSystemTime(Date.now() + 10_000);
+    window.dispatchEvent(new Event('focus'));
+    await advance(RETURN_CHECK_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+    // With nothing unsent, a failed check doesn't make the status "waiting".
+    expect(engine.getSnapshot().status).toMatchObject({ phase: 'idle', error: { code: 'unavailable' } });
+
+    // A focus change during the backoff doesn't send anything or bring the retry forward.
+    window.dispatchEvent(new Event('focus'));
+    await advance(BACKOFF_MIN_MS - 1, engine);
+    expect(server.requests).toHaveLength(1);
+    await advance(1, engine);
+    expect(server.requests).toHaveLength(2);
+    expect(engine.getSnapshot().status).toMatchObject({ phase: 'idle', error: null });
+  });
+
+  it('losing the focus sends a released journey now, so the window clicked into finds it', async () => {
+    await signIn();
+    const { engine, server, window } = setup();
+    await started(engine);
+    await record(engine, route('paddington', 'waterloo'));
+    expect(server.requests).toHaveLength(0);
+
+    window.dispatchEvent(new Event('blur'));
+    await engine.idle();
+    expect(server.requests).toEqual([[expect.objectContaining({ type: 'add', items: expect.objectContaining({ sections: sectionIds(route('paddington', 'waterloo')) }) })]]);
+    // The debounce it replaced doesn't send again.
+    await advance(LOCAL_CHANGE_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('losing the focus leaves a journey that can still be undone alone, as its bar is still on screen', async () => {
+    await signIn();
+    const { engine, server, window } = setup();
+    await started(engine);
+    await recordJourney(route('paddington', 'waterloo'));
+    engine.nudge();
+
+    window.dispatchEvent(new Event('blur'));
+    await advance(LOCAL_CHANGE_DELAY_MS, engine);
+    expect(server.requests).toHaveLength(0);
+    expect((await undoLastJourney()).outcome).toBe('undone');
   });
 
   it('starts by sending unsent rows', async () => {
@@ -312,7 +492,7 @@ describe('failures', () => {
     await advance(BACKOFF_MIN_MS * 2 - 1, engine);
     expect(server.requests).toHaveLength(2);
     setVisibility('visible');
-    await engine.idle();
+    await advance(RETURN_CHECK_DELAY_MS, engine);
     expect(server.requests).toHaveLength(3);
     expect(engine.getSnapshot().status).toMatchObject({ phase: 'idle', error: null, unsent: false });
   });
@@ -424,7 +604,7 @@ describe('applying answers', () => {
 
     vi.setSystemTime(T + STALE_AFTER_MS);
     setVisibility('visible');
-    await engine.idle();
+    await advance(RETURN_CHECK_DELAY_MS, engine);
     // The first request fetched; reconcile then queued the old tab's ids and the same run sent them.
     expect(server.requests).toEqual([[], [expect.objectContaining({ type: 'add', items: { sections: [S1, S2] } })]]);
     expect(sorted(Object.keys(server.state.items.sections))).toEqual(sorted([S1, S2]));
@@ -556,14 +736,14 @@ describe('scenarios', () => {
     await record(engine, route('paddington', 'waterloo'));
     await advance(LOCAL_CHANGE_DELAY_MS, engine);
     server.state = applyChange(server.state, { id: 'b-reset', type: 'reset', at: Date.now() + 1000 });
-    // Coming back under 2 minutes after the last sync doesn't fetch; after that it does.
-    vi.setSystemTime(Date.now() + STALE_AFTER_MS - 1);
+    // A check (after the pause) within a few seconds of the last sync doesn't fetch again; after that it does.
+    vi.setSystemTime(Date.now() + STALE_AFTER_MS - RETURN_CHECK_DELAY_MS - 1);
     setVisibility('visible');
-    await engine.idle();
+    await advance(RETURN_CHECK_DELAY_MS, engine);
     expect(server.requests).toHaveLength(1);
-    vi.setSystemTime(Date.now() + 1);
+    vi.setSystemTime(Date.now() + 1 - RETURN_CHECK_DELAY_MS);
     setVisibility('visible');
-    await engine.idle();
+    await advance(RETURN_CHECK_DELAY_MS, engine);
     expect(server.requests).toHaveLength(2);
     expect(await storedProgress()).toEqual({ travelledSegmentIDs: [], walkedLinkIDs: [], stationsEnteredOrExitedIDs: [], stationsChangedAtIDs: [] });
   });
