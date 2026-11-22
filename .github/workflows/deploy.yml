@@ -38,7 +38,7 @@ jobs:
         run: npm run build
         env:
           # Backup & sync server (sync-server/). Remove this to build the app without Backup & sync.
-          VITE_SYNC_URL: https://tube-tracker-sync.tube-tracker-passkey-spike.workers.dev
+          VITE_SYNC_URL: https://tube-tracker-sync.tube-tracker.workers.dev
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
