@@ -195,6 +195,29 @@ test.describe('iPhone Safari', () => {
     await expect(prompt).toBeVisible();
   });
 
+  test('steps aside while a journey can be undone', async ({ page }) => {
+    await openMap(page, { installPrompt: 'default' });
+    const prompt = installPrompt(page);
+    await expect(prompt).toBeVisible();
+
+    for (const stationId of ['paddington', 'waterloo']) {
+      await stationLabel(page, stationId).focus();
+      await page.keyboard.press('Enter');
+    }
+    const routeBar = page.locator('.route-action-bar');
+    await routeBar.getByRole('button', { name: 'Record route' }).tap();
+    await expect(routeBar).toBeHidden();
+    // The undo bar sits where the route actions were, and the pop-up keeps out of its way.
+    const undoBar = page.locator('[data-undo-bar]');
+    await expect(undoBar).toBeVisible();
+    await expect(prompt).toBeHidden();
+
+    await undoBar.getByRole('button', { name: 'Dismiss' }).tap();
+    await expect(undoBar).toBeHidden();
+    await expect(prompt).toBeVisible();
+    await expect(prompt).toContainText('keeps its own data');
+  });
+
   test('never shows in the home-screen app, which asks for persistent storage once', async ({ page }) => {
     const errors = collectErrors(page);
     await emulateStandalone(page);
@@ -210,11 +233,21 @@ test.describe('iPhone Safari', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a regular Safari tab never asks for persistent storage', async ({ page }) => {
+  test('a regular Safari tab asks for persistent storage once, when a journey is first recorded', async ({ page }) => {
     await countPersistRequests(page);
     await openMap(page, { installPrompt: 'default' });
     await expect(installPrompt(page)).toBeVisible();
     expect(await persistRequests(page)).toBe(0);
+    await installPrompt(page).getByRole('button', { name: 'Close' }).tap();
+
+    const routeBar = page.locator('.route-action-bar');
+    for (const [from, to] of [['paddington', 'waterloo'], ['bank', 'stratford']] as const) {
+      await stationLabel(page, from).tap();
+      await stationLabel(page, to).tap();
+      await routeBar.getByRole('button', { name: /record route/i }).tap();
+      await expect(routeBar).toBeHidden();
+    }
+    expect(await persistRequests(page)).toBe(1);
   });
 });
 

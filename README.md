@@ -23,7 +23,7 @@ Tube Tracker is a Progressive Web App for tracking progress across London's publ
 - `src/data/` — the network: `tfl-network-data.ts` (TfL stations and line sections), `walk-links.ts` (walking interchanges), `line-services.ts` (through-services on every branched line), entities (`station`, `track-section`, `walk-link`), `transit-network.ts` and `route-planner.ts` (journey planning: changes first, then distance)
 - `src/lib/` — progress and statistics (`progress.ts`), persistence (`storage.ts`), route text (`route-format.ts`), zoom maths (`map-zoom.ts`), install-prompt logic
 - `src/assets/reference-map-clean.svg` — the reference map SVG, embedded directly so its own station labels are interactive
-- `e2e/` — Playwright specs: a viewport sweep with screenshots, map health checks (every section drawable, no geometry work on hover), interactions, pinch zoom and the install prompt
+- `e2e/` — Playwright specs: a viewport sweep with screenshots, map health checks (every section drawable, no geometry work on hover), interactions, pinch zoom, the install prompt and Backup & sync (against the real sync server)
 - `vite.config.ts` — Vite, Tailwind, PWA and Vitest configuration
 
 ## Local development
@@ -44,9 +44,12 @@ npm run build
 ```bash
 npm test        # unit tests (Vitest)
 npm run e2e     # end-to-end tests (Playwright) across phone, tablet, laptop and widescreen viewports
+npx tsc -p e2e  # type-check the end-to-end specs and playwright.config.ts (CI runs this too)
 ```
 
 The end-to-end tests use the locally installed Chrome, plus Playwright's WebKit build for the iPhone profile (`npx playwright install webkit`). Screenshots of every viewport, in light and dark mode, are written to `test-results/screens/`.
+
+Playwright starts three servers on ports derived from `E2E_PORT` (default 5199): the app without backup on `E2E_PORT` (every spec but `sync.spec.ts`), the app built with `VITE_SYNC_URL` on `E2E_PORT + 1`, and the sync server under `wrangler dev` on `E2E_PORT + 2`, with a fresh local database each run (`e2e/sync-server.mjs`). The last needs the sync server's own dependencies: `npm install --prefix sync-server`. Passkeys come from Playwright's virtual authenticator, so no real device or Cloudflare account is involved.
 
 ## App icons
 

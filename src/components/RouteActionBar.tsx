@@ -1,12 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
+import { useFloatingBarHeight } from '../hooks/useFloatingBarHeight';
 import { formatRouteEndpoints, getRouteKey } from '../lib/map-interactions';
 import { isStreetWalkOnly, routeIsAlreadyComplete } from '../lib/progress';
 import { describeRouteChanges, describeRouteDistance, describeRouteTitle, getStationName } from '../lib/route-format';
 import type { Progress, RouteResult } from '../lib/types';
 import { PreviewSwatch } from './HighlightSwatches';
-
-/** On phones the bar floats over the map; its height lets the map and page leave room for it (see styles.css). */
-const ROUTE_BAR_HEIGHT_PROPERTY = '--tt-route-bar-height';
 
 interface RouteActionBarProps {
   /** Whether the selected route includes track (or walks) not yet recorded, shown in the preview colour. */
@@ -20,6 +18,9 @@ interface RouteActionBarProps {
   onClear: () => void;
   onChooseRoute: (route: RouteResult) => void;
   onToggleChooser: () => void;
+  /** The journey was just undone with the undo bar's button, which went with it: focus Record instead (once). */
+  focusOnMount?: boolean;
+  onFocused?: () => void;
 }
 
 export function RouteActionBar(props: RouteActionBarProps) {
@@ -28,24 +29,16 @@ export function RouteActionBar(props: RouteActionBarProps) {
   const endpoints = formatRouteEndpoints(startId && getStationName(startId), endId && getStationName(endId));
   const activeKey = getRouteKey(activeRoute);
   const barRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const bar = barRef.current;
-    if (!bar) return;
-    const root = document.documentElement;
-    let frame = 0;
-    // Applied on the next frame: the property changes other elements' layout, which must not re-enter this observer.
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => root.style.setProperty(ROUTE_BAR_HEIGHT_PROPERTY, `${bar.offsetHeight}px`));
-    });
-    observer.observe(bar);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-      root.style.removeProperty(ROUTE_BAR_HEIGHT_PROPERTY);
-    };
-  }, []);
+  const clearRef = useRef<HTMLButtonElement | null>(null);
+  const recordRef = useRef<HTMLButtonElement | null>(null);
+  // On phones the bar floats over the map; its height lets the map and page leave room for it.
+  useFloatingBarHeight(barRef);
+  const { focusOnMount = false, onFocused } = props;
+  useLayoutEffect(() => {
+    if (!focusOnMount) return;
+    (recordRef.current ?? clearRef.current)?.focus({ preventScroll: true });
+    onFocused?.();
+  }, [focusOnMount, onFocused]);
   // A walk-only journey's single change just repeats the endpoints, so it is not repeated.
   const changesText = activeRoute.legs.length > 1 ? describeRouteChanges(activeRoute) : '';
 
@@ -62,7 +55,7 @@ export function RouteActionBar(props: RouteActionBarProps) {
           {changesText && <span className="block text-xs font-normal text-slate-600 dark:text-slate-300">{changesText}</span>}
         </p>
         <div className="route-buttons flex flex-wrap gap-2">
-          <button onClick={props.onClear} className="min-h-11 rounded-full border border-slate-300 px-4 py-2 text-sm dark:border-slate-600">
+          <button ref={clearRef} onClick={props.onClear} className="min-h-11 rounded-full border border-slate-300 px-4 py-2 text-sm dark:border-slate-600">
             Clear selection
           </button>
           {isStreetWalkOnly(activeRoute) ? (
@@ -71,7 +64,7 @@ export function RouteActionBar(props: RouteActionBarProps) {
               Walk only, nothing to record
             </button>
           ) : (
-            <button onClick={props.onRecord} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
+            <button ref={recordRef} onClick={props.onRecord} className="min-h-11 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white">
               {routeIsAlreadyComplete(progress, activeRoute) ? 'Already explored' : 'Record route'}
             </button>
           )}

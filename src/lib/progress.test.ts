@@ -4,6 +4,7 @@ import {
   addRouteToProgress,
   EMPTY_PROGRESS,
   getJourneyStations,
+  getRouteItems,
   getStationState,
   isStreetWalkOnly,
   routeIsAlreadyComplete,
@@ -115,6 +116,20 @@ describe('recording journeys', () => {
     expect(passedThrough.every((stationId) => getStationState(stationId, progress) === 'visited')).toBe(true);
     expect(getStationState('upminster', progress)).toBe('neutral');
     expect(getStationState('paddington', EMPTY_PROGRESS)).toBe('neutral');
+  });
+
+  it('lists every id a journey touches, even ones already recorded, and nothing for a street walk', () => {
+    const journey = route('paddington', 'waterloo');
+    const items = getRouteItems(journey);
+    expect(addRouteToProgress(EMPTY_PROGRESS, journey)).toEqual(items);
+    // Already explored: recording adds nothing locally, but backup still needs every id (a reset may be on its way).
+    expect(getRouteItems(journey)).toEqual(items);
+    expect(items.travelledSegmentIDs).toEqual(journey.sections.map((section) => section.id));
+    expect(items.stationsEnteredOrExitedIDs).toEqual(['paddington', 'waterloo']);
+    expect(getRouteItems(route('edgware_road_bakerloo', 'edgware_road_circle'))).toEqual(EMPTY_PROGRESS);
+
+    const withWalkway = findRoutes('bank', 'tower_hill', 30).find((option) => option.links[0]?.type === 'walk')!;
+    expect(getRouteItems(withWalkway)).toEqual(addRouteToProgress(EMPTY_PROGRESS, withWalkway));
   });
 });
 

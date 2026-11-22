@@ -7,8 +7,23 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // React and Dexie change far less often than the app: in a chunk of their own, an app release doesn't make
+          // every device download them again. Named packages only: a catch-all would also pull workbox-window, which
+          // is loaded lazily, into this eagerly loaded chunk.
+          groups: [{ name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|dexie)[\\/]/ }]
+        }
+      }
+    }
+  },
   test: {
-    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/**']
+    // sync-server has its own vitest (Workers pool) and package.json.
+    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/**', 'sync-server/**'],
+    // Storage tests run Dexie against an in-memory IndexedDB.
+    setupFiles: ['src/test-setup.ts']
   },
   plugins: [
     react(),

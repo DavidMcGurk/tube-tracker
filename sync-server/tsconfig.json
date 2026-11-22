@@ -1,0 +1,19 @@
+{
+  // The Worker. Tests have their own config (test/tsconfig.json); `npm run typecheck` runs both.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  // The shared model (../src/lib/sync-model.ts) is pulled in by import.
+  "include": ["src"]
+}

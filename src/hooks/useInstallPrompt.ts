@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
   detectInstallPlatform,
   getInstallCaptureSnapshot,
@@ -8,7 +8,7 @@ import {
   takeDeferredInstallPrompt,
   type InstallPromptState
 } from '../lib/install-prompt';
-import { observeInstallPromptState, updateInstallPromptState } from '../lib/storage';
+import { observeInstallPromptState, requestPersistentStorage, updateInstallPromptState } from '../lib/storage';
 import { useMediaQuery } from './useMediaQuery';
 
 /** The pop-up waits a moment after load so it never competes with the first look at the map. */
@@ -38,7 +38,6 @@ export function useInstallPrompt() {
   const [stored, setStored] = useState<InstallPromptState | null>(null);
   const [delayElapsed, setDelayElapsed] = useState(false);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
-  const persistRequestedRef = useRef(false);
 
   useEffect(() => observeInstallPromptState(setStored, (error) => {
     console.error('Unable to load the install prompt state', error);
@@ -54,12 +53,10 @@ export function useInstallPrompt() {
     if (capture.installed && stored && stored.installedAt === undefined) saveInstallPromptState({ installedAt: Date.now() });
   }, [capture.installed, stored]);
 
-  // Installed apps ask for persistent storage so the browser does not evict saved progress. Browser tabs never ask,
-  // because some browsers show a permission prompt for it.
+  // Installed apps ask for persistent storage as soon as they open. Browser tabs wait until a journey is recorded
+  // (see useProgress), because Firefox shows a permission prompt for it.
   useEffect(() => {
-    if (!standalone || persistRequestedRef.current) return;
-    persistRequestedRef.current = true;
-    navigator.storage?.persist?.().catch((error: unknown) => console.error('Unable to request persistent storage', error));
+    if (standalone) requestPersistentStorage();
   }, [standalone]);
 
   const installed = capture.installed || stored?.installedAt !== undefined;

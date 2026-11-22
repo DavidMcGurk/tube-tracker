@@ -6,9 +6,18 @@ interface InstallPromptProps {
   install: InstallPromptController;
   /** Whether journeys have been recorded here, which an iOS Home Screen app would not see (it keeps its own data). */
   hasProgress: boolean;
-  /** Set while something else needs the screen, such as the route actions or a confirmation dialog. */
+  /** Set while something else needs the screen, such as the route actions, the undo bar or a confirmation dialog. */
   suppressed: boolean;
+  /** Backup & sync, when this build and browser have it: the way to bring journeys across to the Home Screen app. */
+  backup: 'on' | 'off' | null;
 }
+
+/** With journeys recorded here: the Home Screen app won't have them, unless they're backed up and restored there. */
+const HOME_SCREEN_DATA_NOTES = {
+  none: 'The Home Screen app keeps its own data, so journeys recorded here won’t appear in it.',
+  off: 'The Home Screen app keeps its own data. To bring your journeys across, turn on Backup & sync in Settings here, then choose “Restore from a backup” in the app.',
+  on: 'The Home Screen app keeps its own data. Your journeys are backed up: in the app, open Settings and choose “Restore from a backup”.'
+} as const;
 
 const APP_ICON_URL = `${import.meta.env.BASE_URL}favicon.svg`;
 
@@ -63,7 +72,7 @@ function PromptCard({ children, onClose, arrow }: { children: ReactNode; onClose
 }
 
 /** The "Add to Home Screen" pop-up shown to mobile visitors who are not using the installed app. */
-export function InstallPrompt({ install, hasProgress, suppressed }: InstallPromptProps) {
+export function InstallPrompt({ install, hasProgress, suppressed, backup }: InstallPromptProps) {
   const { promptVariant: variant, platform, dismiss } = install;
   const visible = variant !== null && !suppressed;
 
@@ -95,7 +104,7 @@ export function InstallPrompt({ install, hasProgress, suppressed }: InstallPromp
 
   // An iOS Home Screen app has its own storage, so journeys already recorded in the browser don't carry over.
   const storageNote = hasProgress
-    ? 'The Home Screen app keeps its own data, so journeys recorded here won’t appear in it.'
+    ? HOME_SCREEN_DATA_NOTES[backup ?? 'none']
     : platform === 'ios-other-browser' ? null : 'In a Safari tab, saved data can be cleared after 7 days without a visit.';
   const safariNote = storageNote && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{storageNote}</p>;
 

@@ -1,0 +1,29 @@
+{
+  "name": "tube-tracker-sync",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Backup & sync server for Tube Tracker: a Cloudflare Worker with a D1 database (free plan). See ../docs/sync-design.md.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "wrangler d1 migrations apply DB --local && wrangler dev --local --port 8870",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json && tsc -p tsconfig.node.json",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^14.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "~0.23.0",
+    "@cloudflare/workers-types": "^5.20261121.1",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "~4.1.12",
+    "wrangler": "~4.166.0"
+  }
+}
