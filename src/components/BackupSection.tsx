@@ -5,6 +5,7 @@ import { describeStatus, describeUndoWait, formatDate } from '../lib/backup-form
 import { getSyncSnapshot } from '../lib/sync';
 import type { Passkey } from '../lib/sync-api';
 import { ActionButton, BackupName, ConfirmDialog, NoteText, RestoreMergeDialog, TurnOffDialog, type Note } from './BackupDialogs';
+import { SECTION_BUTTON } from './button-styles';
 
 export const BACKUP_HEADING_ID = 'backup-heading';
 export const PRIVACY_DETAILS_ID = 'privacy-details';
@@ -326,12 +327,12 @@ function SignedOut({ hasProgress, standalone, choosing, stepRef, busy, note, del
   const stepId = useId();
   const locked = busy !== null;
   const turnOnButton = (tone: 'primary' | 'secondary', label: string, describedBy?: string) => (
-    <ActionButton tone={tone} aria-describedby={describedBy} locked={locked} pressed={busy === 'turnOn'} busyLabel="Turning on…" onPress={onTurnOn} className="w-full sm:w-auto">
+    <ActionButton tone={tone} aria-describedby={describedBy} locked={locked} pressed={busy === 'turnOn'} busyLabel="Turning on…" onPress={onTurnOn} className={SECTION_BUTTON}>
       {label}
     </ActionButton>
   );
   const restoreButton = (tone: 'primary' | 'secondary', label: string, describedBy?: string) => (
-    <ActionButton tone={tone} aria-describedby={describedBy} locked={locked} pressed={busy === 'restore'} busyLabel="Restoring…" onPress={onRestore} className="w-full sm:w-auto">
+    <ActionButton tone={tone} aria-describedby={describedBy} locked={locked} pressed={busy === 'restore'} busyLabel="Restoring…" onPress={onRestore} className={SECTION_BUTTON}>
       {label}
     </ActionButton>
   );
@@ -365,7 +366,7 @@ function SignedOut({ hasProgress, standalone, choosing, stepRef, busy, note, del
   } else {
     choices = (
       <div className="mt-4 flex flex-wrap gap-3">
-        <ActionButton tone="primary" locked={locked} onPress={onChoose} className="w-full sm:w-auto">Turn on backup</ActionButton>
+        <ActionButton tone="primary" locked={locked} onPress={onChoose} className={SECTION_BUTTON}>Turn on backup</ActionButton>
         {restoreButton('secondary', 'Restore from a backup')}
       </div>
     );
@@ -437,7 +438,7 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
         <p className="text-sm font-medium" data-backup-status={status.phase}>{describeStatus(status, { now: Date.now(), online })}</p>
         {undoWait && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300" data-backup-undo-wait>{undoWait}</p>}
         {status.heldCount > 0 && <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">Some journeys couldn’t be backed up.</p>}
-        <ActionButton tone="secondary" locked={locked} onPress={onBackUpNow} className="mt-3">Back up now</ActionButton>
+        <ActionButton tone="secondary" locked={locked} onPress={onBackUpNow} className={`mt-3 ${SECTION_BUTTON}`}>Back up now</ActionButton>
       </div>
 
       <p className="mt-4 text-sm">Backup: <span className="font-medium whitespace-nowrap">{accountName}</span></p>
@@ -476,7 +477,7 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
         </ul>
       )}
       <div className="mt-3">
-        <ActionButton tone="secondary" aria-describedby={addHelperId} locked={locked} pressed={busy === 'addPasskey'} busyLabel="Adding passkey…" onPress={onAddPasskey}>
+        <ActionButton tone="secondary" aria-describedby={addHelperId} locked={locked} pressed={busy === 'addPasskey'} busyLabel="Adding passkey…" onPress={onAddPasskey} className={SECTION_BUTTON}>
           Add a passkey
         </ActionButton>
         <p id={addHelperId} className={CAPTION}>
@@ -487,15 +488,15 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
       </div>
 
       <div className="mt-4">
-        <ActionButton tone="secondary" locked={locked} onPress={onSignOutOthers}>Sign out other devices</ActionButton>
+        <ActionButton tone="secondary" locked={locked} onPress={onSignOutOthers} className={SECTION_BUTTON}>Sign out other devices</ActionButton>
       </div>
 
       <p className={`mt-4 ${MUTED}`}>
         Using a different backup on your other devices? Delete this one, then choose Restore from a backup. This device’s journeys are added to it.
       </p>
       <div className="mt-3 flex flex-wrap gap-3">
-        <ActionButton tone="secondary" locked={locked} onPress={onTurnOff}>Turn off on this device</ActionButton>
-        <ActionButton tone="danger" locked={locked} onPress={onDelete}>Delete backup…</ActionButton>
+        <ActionButton tone="secondary" locked={locked} onPress={onTurnOff} className={SECTION_BUTTON}>Turn off on this device</ActionButton>
+        <ActionButton tone="danger" locked={locked} onPress={onDelete} className={SECTION_BUTTON}>Delete backup…</ActionButton>
       </div>
     </>
   );

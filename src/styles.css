@@ -121,9 +121,11 @@ button:disabled {
 .tube-map-viewport {
   max-height: min(76vh, 960px);
   overscroll-behavior: contain;
-  /* One-finger panning stays native; pinches are handled in script so they zoom the map rather than the page. */
-  touch-action: pan-x pan-y;
-  -webkit-overflow-scrolling: touch;
+  /*
+   * Touch panning and pinching are done in script (useMapGestures, useMapZoomGestures): on iOS a tap while a native
+   * scroll is still gliding never reaches the page, and pinches must zoom the map rather than the page.
+   */
+  touch-action: none;
   -webkit-touch-callout: none;
   cursor: grab;
   user-select: none;
@@ -256,9 +258,11 @@ button:disabled {
 
   /*
    * Leave room for the floating route bar or undo bar (its height is measured into --tt-route-bar-height): the page and
-   * the map can scroll far enough to bring everything above it, and station details float just above it.
+   * the map can scroll far enough to bring everything above it. The room stays while a journey is being chosen, even
+   * between bars: taking it away clamps the scroll positions, and the map would jump under the finger before the next
+   * tap.
    */
-  .app-shell[data-route-bar='true'] {
+  .app-shell[data-bar-space='true'] {
     & > main.map-main {
       padding-bottom: calc(var(--tt-route-bar-height, 0px) + 1.5rem);
     }
@@ -266,7 +270,10 @@ button:disabled {
     & .tube-map-viewport {
       padding-bottom: var(--tt-route-bar-height, 0px);
     }
+  }
 
+  /* Station details float just above the bar. */
+  .app-shell[data-route-bar='true'] {
     & .map-inspection-panel {
       position: fixed;
       z-index: 111;
@@ -379,6 +386,17 @@ body:has(.app-shell[data-map-fullscreen='true']) {
   & .app-station-hit-area {
     fill: transparent;
     pointer-events: all;
+  }
+
+  /*
+   * Artwork that belongs to no station would otherwise take taps meant for the stations under it: interchange
+   * connectors, the parts of the Bank/Monument hub other than its two bound outlines (they cover most of both
+   * symbols, including where the DLR ends at Bank), and line names. Taps go through to the station instead.
+   */
+  & #station_nodes :is(.osi, .osib, .isi, .isib, .isit),
+  & #Bank_Monument_hub > :not([data-app-station-id]),
+  & #text text:not([data-app-station-id]) {
+    pointer-events: none;
   }
 
   & [cursor='help'] {

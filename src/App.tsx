@@ -8,6 +8,7 @@ import { SettingsView } from './components/SettingsView';
 import { StatsView } from './components/StatsView';
 import { SyncNotice } from './components/SyncNotice';
 import { ThemeToggleButton } from './components/ThemeToggleButton';
+import { clearFloatingBarHeight } from './hooks/useFloatingBarHeight';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useOnline } from './hooks/useOnline';
 import { useProgress } from './hooks/useProgress';
@@ -50,6 +51,11 @@ function App() {
   // The undo bar takes the route actions' place on the map, so the two never show together.
   const undoShowing = activeTab === 'map' && selection.activeRoute === null && undo !== null;
   const bottomBarShowing = routeActionsShowing || undoShowing;
+  // The room left for the bar stays while a journey is being chosen (see styles.css).
+  const bottomBarSpace = bottomBarShowing || (activeTab === 'map' && selection.selectedStationIds.length > 0);
+  useEffect(() => {
+    if (!bottomBarSpace) clearFloatingBarHeight();
+  }, [bottomBarSpace]);
   const hasProgress = progress.travelledSegmentIDs.length > 0 || progress.walkedLinkIDs.length > 0 || progress.stationsEnteredOrExitedIDs.length > 0;
 
   const announce = useCallback((text: string) => setAnnouncement((current) => ({ text, id: (current?.id ?? 0) + 1 })), []);
@@ -127,7 +133,7 @@ function App() {
   const backup = sync.available ? (sync.account ? 'on' : 'off') : null;
 
   return (
-    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen} data-route-bar={bottomBarShowing} data-progress-style={progressStyle}>
+    <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen} data-route-bar={bottomBarShowing} data-bar-space={bottomBarSpace} data-progress-style={progressStyle}>
       <header className="border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         {/*
           The nav and the map sit in a max-w-6xl box with 1rem of padding inside it; this content box is that same width
@@ -216,7 +222,7 @@ function App() {
           offline={!online}
         />
       )}
-      <InstallPrompt install={install} hasProgress={hasProgress} suppressed={bottomBarShowing || resetConfirmationOpen} backup={backup} />
+      <InstallPrompt install={install} hasProgress={hasProgress} suppressed={bottomBarShowing || (activeTab === 'map' && selection.routesPending) || resetConfirmationOpen} backup={backup} />
       {/* Announces journeys recorded and removed (the undo bar itself isn't a live region). */}
       <div role="status" className="sr-only" data-app-announcements>
         {announcement && <p key={announcement.id}>{announcement.text}</p>}

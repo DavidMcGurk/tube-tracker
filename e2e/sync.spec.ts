@@ -327,7 +327,7 @@ test.describe('Backup & sync', () => {
     expectNoErrors(a, b);
   });
 
-  test('a journey recorded on one device reaches another with “Back up now” and when the app comes back', async ({ device }, testInfo) => {
+  test('a journey recorded on one device reaches another with “Back up now”, when the app comes back and when it gets the focus', async ({ device }, testInfo) => {
     const a = await device('A');
     await openApp(a);
     await turnOnBackup(a, testInfo);
@@ -347,13 +347,25 @@ test.describe('Backup & sync', () => {
     await recordOnMap(a, 'bank', 'stratford', testInfo);
     await expectBackedUp(a);
     const both = [...new Set([...first, ...(await routeSections(a, 'bank', 'stratford'))])].sort();
-    // B comes back to the app a few minutes after its last sync.
+    // B comes back to the app 10 seconds after its last sync (it checks again after 5).
     await b.page.evaluate(`(async () => {
       const storage = await import('/src/lib/storage.ts');
-      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 3 * 60 * 1000 });
+      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 10_000 });
       document.dispatchEvent(new Event('visibilitychange'));
     })()`);
     await expect.poll(() => travelled(b)).toEqual(both);
+
+    // Windows side by side on a computer: record in A, close its undo bar, then click straight into B's window (10
+    // seconds after B's last sync). A sends as it loses the focus, before B checks.
+    await b.page.evaluate(`(async () => {
+      const storage = await import('/src/lib/storage.ts');
+      await storage.db.sync.update('status', { lastSyncedAt: Date.now() - 10_000 });
+    })()`);
+    await recordOnMap(a, 'brixton', 'victoria', testInfo);
+    await a.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await b.page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const all = [...new Set([...both, ...(await routeSections(a, 'brixton', 'victoria'))])].sort();
+    await expect.poll(() => travelled(b)).toEqual(all);
     expectNoErrors(a, b);
   });
 
@@ -819,6 +831,22 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(backupA.getByRole('listitem')).toHaveCount(2);
       await expectTapTargets(backupA);
       await shot(backupA, '04-on-two-passkeys');
+      // The section's own buttons, and Reset progress, are uniform whatever their label (row actions such as a
+      // passkey's Remove are not): on phones each fills its container (Back up now sits in the status box), and on
+      // larger screens they are all one width.
+      const phone = a.page.viewportSize()!.width < 640;
+      const widths: Record<string, number> = {};
+      for (const name of ['Back up now', 'Add a passkey', 'Sign out other devices', 'Turn off on this device', 'Delete backup…', 'Reset progress']) {
+        widths[name] = await button(a.page, name).evaluate((element, fill) => {
+          const container = element.closest('div:not(.flex)')!;
+          const style = getComputedStyle(container);
+          const inner = container.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+          // On phones: how far short of its container's width it falls (0 when it fills it).
+          return Math.round(fill ? inner - element.getBoundingClientRect().width : element.getBoundingClientRect().width);
+        }, phone);
+      }
+      if (phone) expect(Object.values(widths).every((gap) => gap === 0), JSON.stringify(widths)).toBe(true);
+      else expect(new Set(Object.values(widths)).size, JSON.stringify(widths)).toBe(1);
 
       const dialogShot = async (opener: Locator, title: string, step: string) => {
         await press(opener, testInfo);

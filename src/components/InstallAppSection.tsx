@@ -1,4 +1,5 @@
 import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import { buttonClass, SECTION_BUTTON } from './button-styles';
 import { IosInstallSteps, isIosPlatform } from './InstallSteps';
 
 interface InstallAppSectionProps {
@@ -22,7 +23,7 @@ export function InstallAppSection({ install, hasProgress, backup }: InstallAppSe
     body = (
       <button
         onClick={() => void install.install()}
-        className="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+        className={`${buttonClass('primary')} ${SECTION_BUTTON}`}
       >
         Install app
       </button>

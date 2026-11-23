@@ -1,6 +1,7 @@
 import { BackupName } from './BackupDialogs';
 import { ModalDialog } from './ModalDialog';
 import { PROGRESS_HEADING_ID } from './SettingsView';
+import { buttonClass } from './button-styles';
 
 interface ResetDialogProps {
   onCancel: () => void;
@@ -28,10 +29,10 @@ export function ResetDialog({ onCancel, onConfirm, backupName, offline, returnFo
         </p>
       )}
       <div className="mt-5 flex justify-end gap-3">
-        <button type="button" data-autofocus className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm dark:border-slate-600" onClick={onCancel}>
+        <button type="button" data-autofocus className={buttonClass('secondary')} onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white" onClick={onConfirm}>
+        <button type="button" className={buttonClass('danger')} onClick={onConfirm}>
           Reset progress
         </button>
       </div>
