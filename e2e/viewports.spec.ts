@@ -84,6 +84,38 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
+test('the map tab fits the screen: the page doesn’t scroll or zoom there, and other tabs still do', async ({ page }, testInfo) => {
+  await openMap(page);
+  const pageState = () => page.evaluate(() => {
+    const view = document.querySelector('.tube-map-viewport')?.getBoundingClientRect();
+    return {
+      overflow: document.documentElement.scrollHeight - window.innerHeight,
+      htmlOverflow: getComputedStyle(document.documentElement).overflowY,
+      gapUnderMap: view ? window.innerHeight - view.bottom : null,
+      viewportTag: document.querySelector<HTMLMetaElement>('meta[name="viewport"]')!.content,
+      touchAction: getComputedStyle(document.querySelector('.app-shell')!).touchAction
+    };
+  });
+  const onMap = await pageState();
+  expect(onMap.overflow, 'nothing to scroll on the map tab').toBeLessThanOrEqual(0);
+  expect(onMap.htmlOverflow).toBe('hidden');
+  expect(onMap.gapUnderMap, 'the map reaches down to the bottom of the screen').toBeLessThan(48);
+  expect(onMap.viewportTag).toContain('user-scalable=no');
+  expect(onMap.touchAction).toBe('pan-x pan-y');
+
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+  await expect(page.locator('.route-action-bar')).toBeVisible();
+  expect((await pageState()).overflow, 'nor with the route bar showing').toBeLessThanOrEqual(0);
+
+  await page.getByRole('button', { name: 'Statistics' }).click();
+  await expect(page.getByRole('progressbar', { name: 'Whole network track travelled' })).toBeVisible();
+  const onStats = await pageState();
+  expect(onStats.htmlOverflow).not.toBe('hidden');
+  expect(onStats.viewportTag).not.toContain('user-scalable');
+  expect(onStats.touchAction).toBe('auto');
+});
+
 test('a phone held sideways keeps the map usable with a route and its alternatives open', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone-393', 'one phone project, rotated');
   await page.setViewportSize({ width: 852, height: 393 });

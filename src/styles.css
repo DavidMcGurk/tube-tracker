@@ -150,48 +150,99 @@ button:disabled {
   overscroll-behavior: contain;
 }
 
-/* Larger screens: the map tab fills the window and the map viewport takes the remaining height. */
-@media (min-width: 641px) and (min-height: 560px) {
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
-    display: grid;
+/*
+ * The map tab fills the window exactly, on phones too, and the map viewport takes the remaining height: the page itself
+ * never scrolls, so only the map moves under a finger (a scrolling page also slid the browser's toolbars in and out,
+ * resizing everything mid-drag).
+ */
+.app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+  display: grid;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  /* Header, tabs, the signed-out notice (0 tall when there isn't one) and the map. */
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+
+  & > main.map-main {
+    grid-row: 4;
+    box-sizing: border-box;
     width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    /* Header, tabs, the signed-out notice (0 tall when there isn't one) and the map. */
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     overflow: hidden;
+  }
+
+  & .map-card {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  & :is(.map-toolbar, .route-action-bar, .undo-bar, .map-inspection-panel) {
+    flex: none;
+  }
+
+  & .tube-map-viewport {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+
+  & .route-options {
+    max-height: min(28vh, 300px);
+  }
+}
+
+/* Short screens (a phone held sideways): the title and the tabs share a row, to leave the map more height. */
+@media (max-height: 559px) {
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+
+    & > header {
+      grid-row: 1;
+      grid-column: 1;
+      display: flex;
+      align-items: center;
+      border-bottom: 0;
+      background: transparent;
+      backdrop-filter: none;
+    }
+
+    & > nav {
+      grid-row: 1;
+      grid-column: 2;
+      align-self: center;
+      padding-top: calc(0.5rem + env(safe-area-inset-top));
+      padding-bottom: 0.5rem;
+    }
+
+    & > .sync-notice-slot {
+      grid-row: 2;
+      grid-column: 1 / -1;
+    }
 
     & > main.map-main {
-      grid-row: 4;
-      box-sizing: border-box;
-      width: 100%;
-      height: 100%;
-      min-height: 0;
-      padding-bottom: 1rem;
-      overflow: hidden;
-    }
-
-    & .map-card {
-      display: flex;
-      box-sizing: border-box;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    & :is(.map-toolbar, .route-action-bar, .undo-bar) {
-      flex: none;
-    }
-
-    & .tube-map-viewport {
-      flex: 1;
-      min-height: 0;
-      max-height: none;
-    }
-
-    & .route-options {
-      max-height: min(28vh, 300px);
+      grid-row: 3;
+      grid-column: 1 / -1;
     }
   }
+}
+
+/* No double-tap or pinch zoom of the page on the map tab (the map has its own pinch zoom; see usePageZoomLock). */
+.app-shell[data-active-tab='map'] {
+  touch-action: pan-x pan-y;
+}
+
+/* Nor can the page be scrolled, pulled down or bounced on the map tab. */
+html:has(.app-shell[data-active-tab='map']),
+html:has(.app-shell[data-active-tab='map']) body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 /*
@@ -199,14 +250,6 @@ button:disabled {
  * undo bar that takes their place once a journey is recorded.
  */
 @media (max-width: 640px), (max-height: 559px) {
-  .tube-map-viewport {
-    max-height: min(66svh, 720px);
-
-    &:has(+ .map-inspection-panel) {
-      max-height: calc(min(66svh, 720px) - 68px);
-    }
-  }
-
   :is(.route-action-bar, .undo-bar) {
     position: fixed;
     z-index: 110;
@@ -257,19 +300,12 @@ button:disabled {
   }
 
   /*
-   * Leave room for the floating route bar or undo bar (its height is measured into --tt-route-bar-height): the page and
-   * the map can scroll far enough to bring everything above it. The room stays while a journey is being chosen, even
-   * between bars: taking it away clamps the scroll positions, and the map would jump under the finger before the next
-   * tap.
+   * Leave room for the floating route bar or undo bar (its height is measured into --tt-route-bar-height): the map can
+   * scroll far enough to bring everything above it. The room stays while a journey is being chosen, even between bars:
+   * taking it away clamps the scroll position, and the map would jump under the finger before the next tap.
    */
-  .app-shell[data-bar-space='true'] {
-    & > main.map-main {
-      padding-bottom: calc(var(--tt-route-bar-height, 0px) + 1.5rem);
-    }
-
-    & .tube-map-viewport {
-      padding-bottom: var(--tt-route-bar-height, 0px);
-    }
+  .app-shell[data-bar-space='true'] .tube-map-viewport {
+    padding-bottom: var(--tt-route-bar-height, 0px);
   }
 
   /* Station details float just above the bar. */
@@ -282,16 +318,6 @@ button:disabled {
       left: calc(0.75rem + env(safe-area-inset-left));
       margin: 0;
       box-shadow: 0 8px 24px rgb(15 23 42 / 20%);
-    }
-  }
-}
-
-@media (max-width: 640px) and (max-height: 700px) {
-  .tube-map-viewport {
-    max-height: 62svh;
-
-    &:has(+ .map-inspection-panel) {
-      max-height: calc(62svh - 68px);
     }
   }
 }

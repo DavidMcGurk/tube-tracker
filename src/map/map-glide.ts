@@ -17,9 +17,9 @@ export const STILL_BEFORE_RELEASE_MS = 60;
 /** Slower releases (px/ms) don't glide. */
 export const MIN_GLIDE_SPEED = 0.25;
 /** Faster flicks are capped, so one flick can't throw the map from one side of London to the other. */
-export const MAX_GLIDE_SPEED = 4;
+export const MAX_GLIDE_SPEED = 2.5;
 /** Speed decays as e^(−t/τ): a glide covers speed × τ in all and has mostly stopped after about 2τ. */
-export const GLIDE_TIME_CONSTANT_MS = 325;
+export const GLIDE_TIME_CONSTANT_MS = 225;
 /** Below this speed (px/ms) the glide ends. */
 export const STOP_SPEED = 0.02;
 

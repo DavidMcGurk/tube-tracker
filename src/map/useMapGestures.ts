@@ -58,7 +58,7 @@ function releasePointerCapture(element: Element, pointerId: number) {
  *
  * Touch panning is done here too, not by the browser (the viewport has touch-action: none): on iOS, a tap while a
  * native scroll is still gliding only stops it and never reaches the page. So a flick glides in script (map-glide.ts),
- * and a tap during that glide stops it and still counts. Dragging past the map's top or bottom edge scrolls the page.
+ * and a tap during that glide stops it and still counts.
  */
 export function useMapGestures(callbacks: MapGestureCallbacks) {
   const callbacksRef = useRef(callbacks);
@@ -79,10 +79,8 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
      */
     left: number;
     top: number;
-    /** Movement past the map's top or bottom edge not yet passed on to the page (it scrolls in whole pixels). */
-    pageLeftover: number;
     panning: boolean;
-    /** A finger or pen, which gets page scrolling at the map's edges and a glide after a flick. */
+    /** A finger or pen, which gets a glide after a flick. */
     direct: boolean;
     /** Recent positions, for the flick's speed. */
     samples: PanSample[];
@@ -222,7 +220,6 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
       lastY: event.clientY,
       left: viewport.scrollLeft,
       top: viewport.scrollTop,
-      pageLeftover: 0,
       panning: false,
       direct: event.pointerType !== 'mouse',
       // The press counts towards a flick: a quick one may have only one move past the drag threshold.
@@ -268,19 +265,11 @@ export function useMapGestures(callbacks: MapGestureCallbacks) {
     const dy = event.clientY - pan.lastY;
     pan.lastX = event.clientX;
     pan.lastY = event.clientY;
-    const wantedTop = pan.top - dy;
     pan.left = Math.min(Math.max(pan.left - dx, 0), viewport.scrollWidth - viewport.clientWidth);
-    pan.top = Math.min(Math.max(wantedTop, 0), viewport.scrollHeight - viewport.clientHeight);
+    pan.top = Math.min(Math.max(pan.top - dy, 0), viewport.scrollHeight - viewport.clientHeight);
     viewport.scrollLeft = pan.left;
     viewport.scrollTop = pan.top;
     if (!pan.direct) return;
-    // Past the map's top or bottom edge, the rest of the drag scrolls the page, as a native scroll would.
-    pan.pageLeftover += wantedTop - pan.top;
-    const whole = Math.trunc(pan.pageLeftover);
-    if (whole) {
-      viewport.ownerDocument.defaultView?.scrollBy(0, whole);
-      pan.pageLeftover -= whole;
-    }
     pan.samples = addPanSample(pan.samples, { t: event.timeStamp, x: event.clientX, y: event.clientY });
   }, [cancelPress, startPanning]);
 
