@@ -1,6 +1,5 @@
+import { PROJECT_ISSUES_URL } from '../lib/project-links';
 import { PRIVACY_DETAILS_ID } from './BackupSection';
-
-const PROJECT_ISSUES_URL = 'https://github.com/DavidMcGurk/tube-tracker/issues';
 
 /** Settings → About: what Backup & sync keeps and for how long (docs/sync-design.md, "Privacy details"). */
 export function PrivacyDetails() {
