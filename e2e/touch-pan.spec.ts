@@ -79,6 +79,9 @@ test('a slow drag doesn’t glide', async ({ page }) => {
 });
 
 test('a tap during a glide stops it and still chooses the station', async ({ page }, testInfo) => {
+  // The page's clock, so the glide can be held still while the test finds a label and taps it: on a slow machine the
+  // map would otherwise glide on between the two, and the tap could miss.
+  await page.clock.install();
   await openMap(page);
   await selectStation(page, testInfo, 'paddington');
   const cdp = await page.context().newCDPSession(page);
@@ -86,6 +89,8 @@ test('a tap during a glide stops it and still chooses the station', async ({ pag
   await drag(page, cdp, x, y, -150, 0);
   const lifted = await scrollOf(page);
   await page.waitForTimeout(150);
+  // Paused a moment ahead (it can't pause in the past); the glide's frames are capped at 50 ms, so the jump is small.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 1000);
   // The station label nearest the middle of the map, mid-glide.
   const target = await page.evaluate(([px, py]) => {
     const view = document.querySelector('.tube-map-viewport')!.getBoundingClientRect();
@@ -101,11 +106,11 @@ test('a tap during a glide stops it and still chooses the station', async ({ pag
   expect(atTap.left).toBeGreaterThan(lifted.left + 10);
   await touch(cdp, 'touchStart', target.x, target.y);
   await touch(cdp, 'touchEnd', target.x, target.y);
-  // The tap counted: a second station is chosen (the map moved a little between finding the label and the tap, so
-  // it may be a neighbour), and the glide stopped there.
+  // The tap counted: a second station is chosen, and the glide stopped there.
   await expect(page.locator('.route-action-bar')).toContainText('Paddington →');
   const afterTap = await scrollOf(page);
   expect(afterTap.left - atTap.left).toBeLessThan(40);
+  await page.clock.resume();
   await page.waitForTimeout(300);
   expect(await scrollOf(page)).toEqual(afterTap);
 });
