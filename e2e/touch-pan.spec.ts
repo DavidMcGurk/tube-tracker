@@ -81,8 +81,7 @@ test('a slow drag doesn’t glide', async ({ page }) => {
 });
 
 test('a tap during a glide stops it and still chooses the station', async ({ page }, testInfo) => {
-  // The page's clock, so the glide can be held still while the test finds a label and taps it: on a slow machine the
-  // map would otherwise glide on between the two, and the tap could miss.
+  // The page's clock, so the glide can be held mid-flight while the test waits, finds a label and taps it.
   await page.clock.install();
   await openMap(page);
   await selectStation(page, testInfo, 'paddington');
@@ -93,6 +92,9 @@ test('a tap during a glide stops it and still chooses the station', async ({ pag
   await page.waitForTimeout(150);
   // Paused a moment ahead (it can't pause in the past); the glide's frames are capped at 50 ms, so the jump is small.
   await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 1000);
+  // Chrome on Linux runs a fling of its own after a flick, and a tap while that fling lasts (about half a second after
+  // a fast flick) only stops it: no click. The glide is held, so it is still under way once Chrome's fling is over.
+  await page.waitForTimeout(1000);
   // The station label nearest the middle of the map, mid-glide.
   const target = await page.evaluate(([px, py]) => {
     const view = document.querySelector('.tube-map-viewport')!.getBoundingClientRect();
