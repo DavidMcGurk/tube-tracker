@@ -101,7 +101,7 @@ export function MapView({ progress, selection, onRecordRoute, undo, focusRequest
   };
 
   return (
-    <main className={`map-main mx-auto max-w-6xl px-4 pb-10${fullscreen ? ' is-fullscreen' : ''}`}>
+    <main className={`map-main mx-auto max-w-(--tt-page-max) px-4 pb-10${fullscreen ? ' is-fullscreen' : ''}`}>
       <div className="map-card rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <MapToolbar
           canClear={canClear}

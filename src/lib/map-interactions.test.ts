@@ -6,6 +6,7 @@ import {
   DEFAULT_MAP_ZOOM,
   DESKTOP_DEFAULT_MAP_ZOOM,
   formatRouteEndpoints,
+  getDesktopDefaultZoom,
   getRouteKey,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
@@ -24,6 +25,16 @@ describe('map interaction helpers', () => {
     expect(stepMapZoom(5.75, 0.25)).toBe(MAX_MAP_ZOOM);
     expect(stepMapZoom(4, 0.25)).toBe(4.25);
     expect(stepMapZoom(4, -0.25)).toBe(3.75);
+  });
+
+  it('starts wider computer screens further out, so they show more of the map at about the same size', () => {
+    // Map viewport widths: a tablet, a 1280 px laptop, a 1440 px screen, and a 1920 px or wider monitor.
+    expect(getDesktopDefaultZoom(762)).toBe(DESKTOP_DEFAULT_MAP_ZOOM);
+    expect(getDesktopDefaultZoom(1222)).toBe(2);
+    expect(getDesktopDefaultZoom(1382)).toBe(1.75);
+    expect(getDesktopDefaultZoom(1862)).toBe(1.25);
+    expect(getDesktopDefaultZoom(5000)).toBe(MIN_MAP_ZOOM);
+    expect(getDesktopDefaultZoom(0)).toBe(DESKTOP_DEFAULT_MAP_ZOOM);
   });
 
   it('snaps continuous (pinched) zooms onto the step grid in the step direction', () => {

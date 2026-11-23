@@ -139,10 +139,10 @@ function App() {
     <div className="app-shell min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" data-active-tab={activeTab} data-map-fullscreen={mapFullscreen} data-route-bar={bottomBarShowing} data-bar-space={bottomBarSpace} data-progress-style={progressStyle}>
       <header className="border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         {/*
-          The nav and the map sit in a max-w-6xl box with 1rem of padding inside it; this content box is that same width
-          (72rem − 2 × 1rem), so the title and the theme button line up with the edges of the tabs and the map.
+          The nav and the map sit in a box --tt-page-max wide with 1rem of padding inside it; this content box is that same
+          width less the padding, so the title and the theme button line up with the edges of the tabs and the map.
         */}
-        <div className="mx-auto flex max-w-[70rem] items-center justify-between">
+        <div className="mx-auto flex max-w-[calc(var(--tt-page-max)-2rem)] items-center justify-between">
           <h1 className="flex items-center gap-2.5 text-xl font-semibold">
             <AppLogo className="app-logo h-5 w-10 shrink-0" />
             Tube Tracker
@@ -153,7 +153,7 @@ function App() {
         </div>
       </header>
 
-      <nav className="mx-auto flex w-full max-w-6xl gap-2 px-4 py-4">
+      <nav className="mx-auto flex w-full max-w-(--tt-page-max) gap-2 px-4 py-4">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -171,7 +171,7 @@ function App() {
         Backup & sync section instead.
       */}
       {sync.notice && activeTab !== 'settings' && (
-        <div className="sync-notice-slot mx-auto w-full max-w-6xl px-4 pb-3">
+        <div className="sync-notice-slot mx-auto w-full max-w-(--tt-page-max) px-4 pb-3">
           <SyncNotice accountName={sync.notice.accountName} onOpenSettings={openBackupSettings} onDismiss={sync.dismissNotice} />
         </div>
       )}

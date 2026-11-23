@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject, type UIEvent } from 'react';
 import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
-import { clampMapZoom, DEFAULT_MAP_ZOOM, DESKTOP_DEFAULT_MAP_ZOOM, MAX_MAP_ZOOM, MIN_MAP_ZOOM, stepMapZoom } from '../lib/map-interactions';
+import { clampMapZoom, DEFAULT_MAP_ZOOM, getDesktopDefaultZoom, MAX_MAP_ZOOM, MIN_MAP_ZOOM, stepMapZoom } from '../lib/map-interactions';
 import { getScrollPositionToCenterBounds } from '../lib/map-view';
 
 export interface MapViewState {
@@ -44,6 +44,17 @@ function storeMapView(view: MapViewState) {
   }
 }
 
+/**
+ * How wide the map viewport will be on a computer, before it's laid out: the window, up to the app's width
+ * (--tt-page-max), less the page padding and the map card's padding and border.
+ */
+function estimateDesktopMapViewportWidth() {
+  const root = getComputedStyle(document.documentElement);
+  const rem = Number.parseFloat(root.fontSize) || 16;
+  const pageMax = Number.parseFloat(root.getPropertyValue('--tt-page-max')) * rem;
+  return Math.min(window.innerWidth, pageMax > 0 ? pageMax : Infinity) - 3.5 * rem - 2;
+}
+
 function centreScroll(viewport: HTMLElement) {
   viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
   viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
@@ -63,7 +74,7 @@ export function useMapViewport({ viewportRef, svgMarkup, fullscreen }: MapViewpo
   const isMobileViewport = useMediaQuery(MOBILE_VIEWPORT_QUERY);
   const [initialView] = useState(() => lastMapView ?? readStoredMapView());
   const [zoom, setZoom] = useState(() => initialView?.zoom
-    ?? (window.matchMedia(MOBILE_VIEWPORT_QUERY).matches ? DEFAULT_MAP_ZOOM : DESKTOP_DEFAULT_MAP_ZOOM));
+    ?? (window.matchMedia(MOBILE_VIEWPORT_QUERY).matches ? DEFAULT_MAP_ZOOM : getDesktopDefaultZoom(estimateDesktopMapViewportWidth())));
   const viewRef = useRef<MapViewState>(initialView ?? { zoom, scrollLeft: 0, scrollTop: 0 });
   const laidOutViewportRef = useRef<HTMLDivElement | null>(null);
   const hasInitialViewRef = useRef(initialView !== null);
