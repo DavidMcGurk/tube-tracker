@@ -283,6 +283,70 @@ test('quickly tapping two stations selects both instead of opening station detai
   await expect(page.locator('.map-inspection-panel')).toBeHidden();
 });
 
+test('choosing a new start while a route shows doesn’t move the map under the finger', async ({ page }, testInfo) => {
+  test.skip(!isTouchProject(testInfo), 'the route bar floats over the map on phones');
+  await openMap(page);
+  await selectStation(page, testInfo, 'paddington');
+  await selectStation(page, testInfo, 'waterloo');
+  const routeBar = page.locator('.route-action-bar');
+  await expect(routeBar).toBeVisible();
+  // Once the room for the bar is in place, scroll the map and the page into it, as reaching the south of the map needs.
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--tt-route-bar-height'))).not.toBe('');
+  await page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('.tube-map-viewport')!;
+    viewport.scrollTop = viewport.scrollHeight;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  const [start, end] = await page.evaluate(() => {
+    const view = document.querySelector('.tube-map-viewport')!.getBoundingClientRect();
+    const barTop = document.querySelector('.route-action-bar')!.getBoundingClientRect().top;
+    const visible = [...document.querySelectorAll<SVGTextElement>('#text text[data-app-station-id]')].filter((label) => {
+      const box = label.getBoundingClientRect();
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      return x > view.left + 10 && x < view.right - 10 && y > view.top + 10 && y < Math.min(view.bottom, barTop) - 10
+        && document.elementFromPoint(x, y)?.closest('[data-app-station-id]') === label;
+    });
+    const ids = [...new Set(visible.map((label) => label.getAttribute('data-app-station-id')!))].filter((id) => !['paddington', 'waterloo'].includes(id));
+    return [ids[0], ids.at(-1)];
+  });
+  expect(start && end && start !== end).toBeTruthy();
+  const before = await centreOf(stationLabel(page, end!));
+  await page.touchscreen.tap(...Object.values(await centreOf(stationLabel(page, start!))) as [number, number]);
+  await expect(routeBar).toBeHidden();
+  const after = await centreOf(stationLabel(page, end!));
+  expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+  await page.touchscreen.tap(after.x, after.y);
+  await expect(routeBar).toBeVisible();
+});
+
+test('a touch just off a station’s name still chooses it', async ({ page }, testInfo) => {
+  test.skip(!isTouchProject(testInfo), 'touch only: a mouse is precise');
+  await openMap(page);
+  await selectStation(page, testInfo, 'paddington');
+  const label = stationLabel(page, 'waterloo');
+  await label.scrollIntoViewIfNeeded();
+  const box = (await label.boundingBox())!;
+  // About 1 mm below the middle of the name: below its letters, on no station.
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2 + 6;
+  expect(await page.evaluate(([px, py]) => document.elementFromPoint(px!, py!)?.closest('[data-app-station-id]') ?? null, [x, y])).toBeNull();
+  await page.touchscreen.tap(x, y);
+  await expect(page.locator('.route-action-bar')).toContainText('Paddington → Waterloo');
+});
+
+test('tapping Bank’s symbol where the DLR ends (not its name) chooses Bank: Cutty Sark → Bank', async ({ page }, testInfo) => {
+  await openMap(page);
+  await selectStation(page, testInfo, 'cutty_sark_for_maritime_greenwich');
+  // Bank's capsule outline is one of the two shapes bound in the Bank/Monument hub; aim at its middle.
+  const capsule = page.locator('#Bank_Monument_hub rect[data-app-station-id="bank"]');
+  await capsule.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'center' }));
+  const { x, y } = await centreOf(capsule);
+  if (isTouchProject(testInfo)) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+  await expect(page.locator('.route-action-bar')).toContainText('Cutty Sark (for Maritime Greenwich) → Bank');
+});
+
 test('double-clicking a station shows its details and keeps the current selection', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'laptop-1280', 'mouse double click');
   await openMap(page);
