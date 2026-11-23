@@ -100,6 +100,40 @@ test('every walking interchange is drawn between its two stations', async ({ pag
   expect(problems).toEqual([]);
 });
 
+test('the direct Elizabeth line track between Liverpool Street and Stratford is drawn apart from the line via Whitechapel', async ({ page }) => {
+  await openMap(page);
+  await seedTravelledSections(page, "section.lineId === 'elizabeth' && ['liverpool_street', 'whitechapel', 'stratford'].includes(section.from) && ['liverpool_street', 'whitechapel', 'stratford'].includes(section.to)");
+  await page.reload();
+  await openMap(page);
+  await expect(page.locator(`${TRAVELLED_LINE_PATHS}[data-app-link-id="elizabeth_liverpool_street_stratford"]`)).toBeAttached();
+
+  const traces = await page.evaluate(`(async () => {
+    const { measureStationAnchors } = await import('/src/map/station-anchors.ts');
+    const svg = document.querySelector('.tube-map-viewport svg');
+    const [whitechapel] = measureStationAnchors(svg).get('whitechapel');
+    const closestTo = (path, anchor) => {
+      let closest = Infinity;
+      for (let length = 0; length <= path.getTotalLength(); length += 1) {
+        const point = path.getPointAtLength(length);
+        closest = Math.min(closest, Math.hypot(point.x - anchor.x, point.y - anchor.y));
+      }
+      return closest;
+    };
+    const trace = (linkId, part) => document.querySelector('#app-travelled-lines [data-part="' + part + '"] path[data-app-link-id="' + linkId + '"]');
+    return {
+      directFromWhitechapel: closestTo(trace('elizabeth_liverpool_street_stratford', 'line'), whitechapel),
+      viaWhitechapelFromWhitechapel: closestTo(trace('elizabeth_liverpool_street_whitechapel', 'line'), whitechapel),
+      // The map dashes the direct track as part-time up to where it joins the line from Whitechapel.
+      directPartTime: Boolean(trace('elizabeth_liverpool_street_stratford', 'part-time')),
+      viaWhitechapelPartTime: Boolean(trace('elizabeth_stratford_whitechapel', 'part-time'))
+    };
+  })()`);
+  expect(traces).toMatchObject({ directPartTime: true, viaWhitechapelPartTime: false });
+  const { directFromWhitechapel, viaWhitechapelFromWhitechapel } = traces as Record<string, number>;
+  expect(viaWhitechapelFromWhitechapel).toBeLessThan(5);
+  expect(directFromWhitechapel).toBeGreaterThan(40);
+});
+
 test('recorded walks are highlighted as walks', async ({ page }) => {
   await openMap(page);
   await page.evaluate(`(async () => {
