@@ -49,7 +49,7 @@ export function StatsView({ progress }: { progress: Progress }) {
 
   return (
     <main className="page-scroll">
-      <div className="page-content mx-auto max-w-6xl px-4 pb-10">
+      <div className="page-content mx-auto max-w-(--tt-page-max) px-4 pb-10">
         <section className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="network-progress-title">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 id="network-progress-title" className="text-lg font-semibold">Whole network</h2>
@@ -57,7 +57,7 @@ export function StatsView({ progress }: { progress: Progress }) {
               {stats.completedLines} / {stats.lineProgress.length} lines completed
             </span>
           </div>
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2 lg:gap-x-8">
             <ProgressBar
               label="Track travelled"
               detail={`${stats.coverage.toFixed(1)}% · ${formatKilometres(stats.travelledDistance)} / ${formatKilometres(stats.totalDistance)} km`}
@@ -77,7 +77,7 @@ export function StatsView({ progress }: { progress: Progress }) {
 
         <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="mb-4 text-lg font-semibold">Line progress</h2>
-          <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {sortedLineProgress.map((line) => {
               const lineColor = THEMED_LINE_COLORS[line.id] ?? lineById.get(line.id)?.color ?? FALLBACK_LINE_COLOR;
               return (

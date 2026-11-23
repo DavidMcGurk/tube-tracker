@@ -14,7 +14,7 @@ export function buttonClass(tone: ButtonTone) {
 }
 
 /**
- * A section's own actions (not small row actions such as a passkey's Remove) are the same size whatever their label:
- * full width on phones, and at least 14rem wide beside each other on larger screens.
+ * Every Settings action, a passkey's Remove included, is the same size whatever its label: full width on phones, and
+ * at least 14rem wide beside each other on larger screens.
  */
 export const SECTION_BUTTON = 'w-full sm:w-auto sm:min-w-56';

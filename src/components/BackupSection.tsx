@@ -438,8 +438,9 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
         <p className="text-sm font-medium" data-backup-status={status.phase}>{describeStatus(status, { now: Date.now(), online })}</p>
         {undoWait && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300" data-backup-undo-wait>{undoWait}</p>}
         {status.heldCount > 0 && <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">Some journeys couldn’t be backed up.</p>}
-        <ActionButton tone="secondary" locked={locked} onPress={onBackUpNow} className={`mt-3 ${SECTION_BUTTON}`}>Back up now</ActionButton>
       </div>
+      {/* Under the status, not inside its box, so it lines up with the section's other buttons. */}
+      <ActionButton tone="secondary" locked={locked} onPress={onBackUpNow} className={`mt-3 ${SECTION_BUTTON}`}>Back up now</ActionButton>
 
       <p className="mt-4 text-sm">Backup: <span className="font-medium whitespace-nowrap">{accountName}</span></p>
       <p className={`mt-1 ${MUTED}`}>Keep the “<BackupName name={accountName} />” passkey in your passwords app. Without it, this backup can’t be restored.</p>
@@ -453,8 +454,8 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
             const title = passkey.provider ?? 'Passkey';
             const added = formatDate(passkey.createdAt);
             return (
-              <li key={passkey.id} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="min-w-0 flex-1 basis-48">
+              <li key={passkey.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="min-w-0">
                   <p className="text-sm font-medium">{title}</p>
                   <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
                     Added {added}{passkey.lastUsedAt !== null && ` · Last used ${formatDate(passkey.lastUsedAt)}`}
@@ -467,7 +468,7 @@ function SignedIn({ accountName, passkeys, status, online, busy, note, onBackUpN
                   )}
                 </div>
                 {passkeys.length > 1 && (
-                  <ActionButton tone="secondary" aria-label={`Remove ${title}, added ${added}`} locked={locked} onPress={(button) => onRemovePasskey(passkey, button)}>
+                  <ActionButton tone="secondary" aria-label={`Remove ${title}, added ${added}`} locked={locked} onPress={(button) => onRemovePasskey(passkey, button)} className={`mt-3 ${SECTION_BUTTON}`}>
                     Remove
                   </ActionButton>
                 )}

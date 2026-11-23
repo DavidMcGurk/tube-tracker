@@ -9,6 +9,11 @@
 /* ---------------------------------------------------------------- Theme tokens */
 
 :root {
+  /*
+   * How wide the app gets: the title, tabs, map and the other tabs' content all share it, so their edges line up. Wide
+   * enough for a big monitor to show much more of the map; beyond it, the app is centred.
+   */
+  --tt-page-max: 120rem;
   color-scheme: light;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
