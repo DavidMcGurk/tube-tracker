@@ -197,6 +197,21 @@ button:disabled {
   }
 }
 
+/* Phones: less space around the title and tabs, which the map can use (it shares the screen with them). */
+@media (max-width: 640px) {
+  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+    & > header {
+      padding-top: calc(0.5rem + env(safe-area-inset-top));
+      padding-bottom: 0.5rem;
+    }
+
+    & > nav {
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+  }
+}
+
 /* Short screens (a phone held sideways): the title and the tabs share a row, to leave the map more height. */
 @media (max-height: 559px) {
   .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
