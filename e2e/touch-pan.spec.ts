@@ -11,15 +11,17 @@ test.beforeEach(({ }, testInfo) => {
 });
 
 /**
- * Sends a touch event. A flick passes `at` (ms since the epoch) to stamp the event with that time rather than when it
- * arrives: the app measures a flick's speed from event times, and a slow machine (e.g. CI) can deliver the lift long
- * enough after the last move that it reads as the finger being held still.
+ * Sends a touch event stamped with a time (ms since the epoch; now unless `at` is given). A flick passes `at` to stamp
+ * the event with when it should happen rather than when it arrives: the app measures a flick's speed from event times,
+ * and a slow machine (e.g. CI) can deliver the lift long enough after the last move that it reads as the finger being
+ * held still. Every event is stamped, so all of them share one clock: on Linux, Chrome's own stamps and given ones
+ * can disagree, and a tap stamped earlier than the flick before it is lost.
  */
-async function touch(cdp: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number, at?: number) {
+async function touch(cdp: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number, at = Date.now()) {
   await cdp.send('Input.dispatchTouchEvent', {
     type,
     touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }],
-    ...(at === undefined ? {} : { timestamp: at / 1000 })
+    timestamp: at / 1000
   });
 }
 
