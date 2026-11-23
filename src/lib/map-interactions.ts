@@ -6,17 +6,19 @@ export const DEFAULT_MAP_ZOOM = 4;
 export const DESKTOP_DEFAULT_MAP_ZOOM = 2;
 export const MAX_MAP_ZOOM = 6;
 
-/**
- * About how wide (CSS px) the map first shows on a computer: 2× on a laptop. Wider screens start further out, at about
- * this size, so a big monitor shows more of the map rather than a bigger copy of the same part.
- */
-export const DESKTOP_MAP_WIDTH = 2450;
+/** Map viewport widths (CSS px) for the first zoom on a computer: a 1280 px laptop's, and a 1920 px monitor's. */
+const LAPTOP_MAP_VIEWPORT_WIDTH = 1220;
+const WIDESCREEN_MAP_VIEWPORT_WIDTH = 1800;
 
-/** The first zoom on a computer for a map viewport this wide: on the 0.25 grid, from 1× up to 2×. */
+/**
+ * The first zoom on a computer for a map viewport this wide: 2× on a laptop, the whole map's width (1×) on a
+ * widescreen monitor, and in between on the 0.25 grid, so wider screens show more of the map.
+ */
 export function getDesktopDefaultZoom(mapViewportWidth: number) {
   if (!(mapViewportWidth > 0)) return DESKTOP_DEFAULT_MAP_ZOOM;
-  const zoom = Math.round((DESKTOP_MAP_WIDTH / mapViewportWidth) * 4) / 4;
-  return Math.min(DESKTOP_DEFAULT_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, zoom));
+  const progress = (mapViewportWidth - LAPTOP_MAP_VIEWPORT_WIDTH) / (WIDESCREEN_MAP_VIEWPORT_WIDTH - LAPTOP_MAP_VIEWPORT_WIDTH);
+  const zoom = DESKTOP_DEFAULT_MAP_ZOOM - Math.min(Math.max(progress, 0), 1) * (DESKTOP_DEFAULT_MAP_ZOOM - MIN_MAP_ZOOM);
+  return Math.round(zoom * 4) / 4;
 }
 
 export function clampMapZoom(zoom: number) {
