@@ -11,7 +11,7 @@ import { ThemeToggleButton } from './components/ThemeToggleButton';
 import { clearFloatingBarHeight } from './hooks/useFloatingBarHeight';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useOnline } from './hooks/useOnline';
-import { usePageZoomLock } from './hooks/usePageZoomLock';
+import { usePreventPageZoom } from './hooks/usePreventPageZoom';
 import { useProgress } from './hooks/useProgress';
 import { useProgressStyle } from './hooks/useProgressStyle';
 import { useRouteSelection } from './hooks/useRouteSelection';
@@ -52,8 +52,8 @@ function App() {
   // The undo bar takes the route actions' place on the map, so the two never show together.
   const undoShowing = activeTab === 'map' && selection.activeRoute === null && undo !== null;
   const bottomBarShowing = routeActionsShowing || undoShowing;
-  // On the map tab only the map moves: the page fits the screen and doesn't zoom (pinching zooms the map).
-  usePageZoomLock(activeTab === 'map');
+  // The page fits the screen and never zooms (pinching zooms the map).
+  usePreventPageZoom();
   // The room left for the bar stays while a journey is being chosen (see styles.css).
   const bottomBarSpace = bottomBarShowing || (activeTab === 'map' && selection.selectedStationIds.length > 0);
   useEffect(() => {

@@ -48,62 +48,64 @@ export function StatsView({ progress }: { progress: Progress }) {
   const sortedLineProgress = useMemo(() => sortLineProgress(stats.lineProgress), [stats.lineProgress]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 pb-10">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="network-progress-title">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 id="network-progress-title" className="text-lg font-semibold">Whole network</h2>
-          <span className="text-sm text-slate-600 dark:text-slate-300">
-            {stats.completedLines} / {stats.lineProgress.length} lines completed
-          </span>
-        </div>
-        <div className="space-y-3">
-          <ProgressBar
-            label="Track travelled"
-            detail={`${stats.coverage.toFixed(1)}% · ${formatKilometres(stats.travelledDistance)} / ${formatKilometres(stats.totalDistance)} km`}
-            percent={stats.coverage}
-            color={NETWORK_COLOR}
-            ariaLabel="Whole network track travelled"
-          />
-          <ProgressBar
-            label="Stations visited"
-            detail={`${percentOf(stats.uniqueStations, stats.totalStations).toFixed(1)}% · ${stats.uniqueStations} / ${stats.totalStations}`}
-            percent={percentOf(stats.uniqueStations, stats.totalStations)}
-            color={NETWORK_COLOR}
-            ariaLabel="Whole network stations visited"
-          />
-        </div>
-      </section>
+    <main className="page-scroll">
+      <div className="page-content mx-auto max-w-6xl px-4 pb-10">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="network-progress-title">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 id="network-progress-title" className="text-lg font-semibold">Whole network</h2>
+            <span className="text-sm text-slate-600 dark:text-slate-300">
+              {stats.completedLines} / {stats.lineProgress.length} lines completed
+            </span>
+          </div>
+          <div className="space-y-3">
+            <ProgressBar
+              label="Track travelled"
+              detail={`${stats.coverage.toFixed(1)}% · ${formatKilometres(stats.travelledDistance)} / ${formatKilometres(stats.totalDistance)} km`}
+              percent={stats.coverage}
+              color={NETWORK_COLOR}
+              ariaLabel="Whole network track travelled"
+            />
+            <ProgressBar
+              label="Stations visited"
+              detail={`${percentOf(stats.uniqueStations, stats.totalStations).toFixed(1)}% · ${stats.uniqueStations} / ${stats.totalStations}`}
+              percent={percentOf(stats.uniqueStations, stats.totalStations)}
+              color={NETWORK_COLOR}
+              ariaLabel="Whole network stations visited"
+            />
+          </div>
+        </section>
 
-      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="mb-4 text-lg font-semibold">Line progress</h2>
-        <div className="space-y-3">
-          {sortedLineProgress.map((line) => {
-            const lineColor = THEMED_LINE_COLORS[line.id] ?? lineById.get(line.id)?.color ?? FALLBACK_LINE_COLOR;
-            return (
-              <div key={line.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="mb-2 flex items-center gap-3">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: lineColor }} />
-                  <span className="font-medium">{line.name}</span>
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="mb-4 text-lg font-semibold">Line progress</h2>
+          <div className="space-y-3">
+            {sortedLineProgress.map((line) => {
+              const lineColor = THEMED_LINE_COLORS[line.id] ?? lineById.get(line.id)?.color ?? FALLBACK_LINE_COLOR;
+              return (
+                <div key={line.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: lineColor }} />
+                    <span className="font-medium">{line.name}</span>
+                  </div>
+                  <div className="space-y-3">
+                    <ProgressBar
+                      label="Line travelled"
+                      detail={`${line.completion.toFixed(1)}% · ${formatKilometres(line.travelledDistance)} / ${formatKilometres(line.totalDistance)} km`}
+                      percent={line.completion}
+                      color={lineColor}
+                      ariaLabel={`${line.name} distance travelled`}
+                    />
+                    <ProgressBar
+                      label="Stations visited"
+                      detail={`${line.stationCompletion.toFixed(1)}% · ${line.visitedStations} / ${line.totalStations}`}
+                      percent={line.stationCompletion}
+                      color={lineColor}
+                      ariaLabel={`${line.name} stations visited`}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <ProgressBar
-                    label="Line travelled"
-                    detail={`${line.completion.toFixed(1)}% · ${formatKilometres(line.travelledDistance)} / ${formatKilometres(line.totalDistance)} km`}
-                    percent={line.completion}
-                    color={lineColor}
-                    ariaLabel={`${line.name} distance travelled`}
-                  />
-                  <ProgressBar
-                    label="Stations visited"
-                    detail={`${line.stationCompletion.toFixed(1)}% · ${line.visitedStations} / ${line.totalStations}`}
-                    percent={line.stationCompletion}
-                    color={lineColor}
-                    ariaLabel={`${line.name} stations visited`}
-                  />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </main>
