@@ -25,7 +25,7 @@ export const MAX_GLIDE_SPEED = 2.5;
  */
 export const GLIDE_TIME_CONSTANT_MS = 225;
 /** The speed (px/ms) below which braking, rather than the glide's own slowing, mostly brings it to a stop. */
-export const BRAKE_SPEED = 0.2;
+export const BRAKE_SPEED = 0.35;
 
 export interface Velocity {
   x: number;
