@@ -1,7 +1,9 @@
 import type { InstallPromptController } from '../hooks/useInstallPrompt';
+import { PROJECT_SOURCE_URL } from '../lib/project-links';
 import { SYNC_CONFIGURED } from '../lib/sync-api';
 import type { ProgressStyle } from '../lib/types';
 import { BackupSection } from './BackupSection';
+import { buttonClass, SECTION_BUTTON } from './button-styles';
 import { TravelledSwatch } from './HighlightSwatches';
 import { InstallAppSection } from './InstallAppSection';
 import { PrivacyDetails } from './PrivacyDetails';
@@ -73,7 +75,7 @@ export function SettingsView({ onResetRequest, install, hasProgress, progressSty
             Progress
           </h2>
           <div className="mt-3 flex flex-wrap gap-3">
-            <button onClick={(event) => onResetRequest(event.currentTarget)} className="min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white">Reset progress</button>
+            <button onClick={(event) => onResetRequest(event.currentTarget)} className={`${buttonClass('danger')} ${SECTION_BUTTON}`}>Reset progress</button>
           </div>
         </div>
 
@@ -113,6 +115,7 @@ export function SettingsView({ onResetRequest, install, hasProgress, progressSty
               licensed under the <ExternalLink href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">Open Government Licence v3.0</ExternalLink>.
             </li>
             <li>Reference project: <ExternalLink href="https://github.com/Demianeen/tube-map">Demianeen/tube-map</ExternalLink>.</li>
+            <li>Source code: <ExternalLink href={PROJECT_SOURCE_URL}>tube-tracker on GitHub</ExternalLink>.</li>
             <li>
               This is not an official TfL service. See the{' '}
               <ExternalLink href={`${import.meta.env.BASE_URL}licenses/reference-map-LICENCE.txt`}>full attribution and licence notice</ExternalLink>.

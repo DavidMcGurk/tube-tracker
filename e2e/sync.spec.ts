@@ -831,6 +831,22 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(backupA.getByRole('listitem')).toHaveCount(2);
       await expectTapTargets(backupA);
       await shot(backupA, '04-on-two-passkeys');
+      // The section's own buttons, and Reset progress, are uniform whatever their label (row actions such as a
+      // passkey's Remove are not): on phones each fills its container (Back up now sits in the status box), and on
+      // larger screens they are all one width.
+      const phone = a.page.viewportSize()!.width < 640;
+      const widths: Record<string, number> = {};
+      for (const name of ['Back up now', 'Add a passkey', 'Sign out other devices', 'Turn off on this device', 'Delete backup…', 'Reset progress']) {
+        widths[name] = await button(a.page, name).evaluate((element, fill) => {
+          const container = element.closest('div:not(.flex)')!;
+          const style = getComputedStyle(container);
+          const inner = container.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+          // On phones: how far short of its container's width it falls (0 when it fills it).
+          return Math.round(fill ? inner - element.getBoundingClientRect().width : element.getBoundingClientRect().width);
+        }, phone);
+      }
+      if (phone) expect(Object.values(widths).every((gap) => gap === 0), JSON.stringify(widths)).toBe(true);
+      else expect(new Set(Object.values(widths)).size, JSON.stringify(widths)).toBe(1);
 
       const dialogShot = async (opener: Locator, title: string, step: string) => {
         await press(opener, testInfo);

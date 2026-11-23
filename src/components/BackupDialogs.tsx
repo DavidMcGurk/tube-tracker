@@ -1,16 +1,9 @@
 import { useId, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { describeMerge, describeMergeReset } from '../lib/backup-format';
 import type { RestoreMerge } from '../lib/sync';
+import { buttonClass, type ButtonTone } from './button-styles';
 import { ModalDialog } from './ModalDialog';
 
-export type ButtonTone = 'primary' | 'secondary' | 'neutral' | 'danger';
-
-const TONES: Record<ButtonTone, string> = {
-  primary: 'bg-emerald-700 font-medium text-white hover:bg-emerald-800',
-  secondary: 'border border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800',
-  neutral: 'bg-slate-900 font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white',
-  danger: 'bg-red-600 font-medium text-white hover:bg-red-700'
-};
 
 interface ActionButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'disabled'> {
   tone: ButtonTone;
@@ -37,7 +30,7 @@ export function ActionButton({ tone, locked, pressed = false, busyLabel, onPress
       onClick={(event) => {
         if (!locked) onPress(event.currentTarget);
       }}
-      className={`min-h-11 rounded-xl px-4 py-2 text-sm aria-disabled:cursor-default aria-disabled:opacity-60 ${TONES[tone]} ${className}`}
+      className={`${buttonClass(tone)} aria-disabled:cursor-default aria-disabled:opacity-60 ${className}`}
     >
       {pressed && busyLabel ? busyLabel : children}
     </button>

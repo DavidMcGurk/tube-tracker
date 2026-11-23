@@ -525,6 +525,86 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
+/**
+ * Scrolls each station's tap circle into the middle of the map and reports what a tap would land on: at its centre,
+ * and on a 7 × 7 grid inside it (within 90% of the radius).
+ */
+function sweepTapCircles(page: Page) {
+  return page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('.tube-map-viewport')!;
+    const view = viewport.getBoundingClientRect();
+    const stationAt = (x: number, y: number) =>
+      document.elementFromPoint(x, y)?.closest('[data-app-station-id]')?.getAttribute('data-app-station-id') ?? null;
+    const describe = (x: number, y: number) => {
+      const element = document.elementFromPoint(x, y);
+      return element ? `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${element.getAttribute('class') ? `.${element.getAttribute('class')}` : ''} in #${element.parentElement?.id ?? '?'}` : 'nothing';
+    };
+    const wrongCentres: string[] = [];
+    const deadSpots = new Map<string, Set<string>>();
+    for (const circle of document.querySelectorAll<SVGCircleElement>('#app-station-hit-areas circle')) {
+      const stationId = circle.getAttribute('data-app-station-id')!;
+      let box = circle.getBoundingClientRect();
+      viewport.scrollLeft += box.x + box.width / 2 - (view.x + view.width / 2);
+      viewport.scrollTop += box.y + box.height / 2 - (view.y + view.height / 2);
+      box = circle.getBoundingClientRect();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      const r = (box.width / 2) * 0.9;
+      const centre = stationAt(cx, cy);
+      if (centre !== stationId) wrongCentres.push(`${stationId} → ${centre ?? describe(cx, cy)}`);
+      for (let i = -3; i <= 3; i++) {
+        for (let j = -3; j <= 3; j++) {
+          const x = cx + (i / 3) * r;
+          const y = cy + (j / 3) * r;
+          if (Math.hypot(x - cx, y - cy) > r || stationAt(x, y)) continue;
+          deadSpots.set(stationId, (deadSpots.get(stationId) ?? new Set()).add(describe(x, y)));
+        }
+      }
+    }
+    return {
+      circles: document.querySelectorAll('#app-station-hit-areas circle').length,
+      wrongCentres,
+      deadSpots: [...deadSpots].map(([stationId, covers]) => `${stationId}: ${[...covers].join(', ')}`)
+    };
+  });
+}
+
+test('choosing the end station responds at once: finding and drawing the route come after', async ({ page }) => {
+  await openMap(page);
+  await stationLabel(page, 'heathrow_terminal_5').click();
+  await stationLabel(page, 'shenfield').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const w = window as unknown as { clickProcessing?: number };
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as PerformanceEventTiming[]) {
+        if (entry.name === 'click') w.clickProcessing = entry.processingEnd - entry.processingStart;
+      }
+    }).observe({ type: 'event', durationThreshold: 16 } as PerformanceObserverInit);
+  });
+  // The first drawing of the Elizabeth line (and finding a cross-London route) is the slowest case.
+  await stationLabel(page, 'shenfield').click();
+  await expect(page.locator('.route-action-bar')).toContainText('Heathrow Terminal 5 → Shenfield');
+  await expect(stationLabel(page, 'shenfield')).toHaveAttribute('data-app-selected', 'true');
+  // Event timing entries arrive after the next paint; give a slow click's entry time to be delivered. (Only events
+  // that took 16 ms or more are reported, so a quick click may never be.)
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)))));
+  const clickProcessing = await page.evaluate(() => (window as unknown as { clickProcessing?: number }).clickProcessing ?? 0);
+  expect(clickProcessing).toBeLessThan(50);
+});
+
+test('a tap on the middle of any station’s drawing selects that station', async ({ page }) => {
+  await openMap(page);
+  const sweep = await sweepTapCircles(page);
+  expect(sweep.circles).toBeGreaterThan(400);
+  expect(sweep.wrongCentres).toEqual([]);
+});
+
+test('nothing drawn over a station’s tap target swallows the tap (line names, connectors, the Bank/Monument hub)', async ({ page }) => {
+  await openMap(page);
+  const sweep = await sweepTapCircles(page);
+  expect(sweep.deadSpots).toEqual([]);
+});
+
 test('station tap targets do not overlap their neighbours', async ({ page }) => {
   await openMap(page);
   const overlaps = await page.evaluate(() => {

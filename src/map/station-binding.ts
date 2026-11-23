@@ -11,9 +11,12 @@ const CONNECTOR_CLASSES = ':not(.osi, .osib, .isi, .isib, .isit)';
 export const STATION_MARKER_SELECTOR = `#station_nodes use[id]${CONNECTOR_CLASSES}`;
 export const UNNAMED_MARKER_SELECTOR = `:scope > use:not([id])${CONNECTOR_CLASSES}`;
 
-/** Bank and Monument are drawn as one hub group; these are their centres in the hub's own coordinates. */
+/**
+ * Bank and Monument are drawn as one hub group; these are their centres in the hub's own coordinates. Bank's capsule
+ * is centred 7.25 along its own axis, which the drawing rotates by 53.13° (the direction of the 20.25, 27 connector).
+ */
 export const BANK_MONUMENT_HUB_POINTS = [
-  { label: 'bank', x: 7.25, y: 0 },
+  { label: 'bank', x: 4.35, y: 5.8 },
   { label: 'monument', x: 20.25, y: 27 }
 ] as const;
 

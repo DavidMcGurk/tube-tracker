@@ -77,7 +77,7 @@ function distance(first: Touch, second: Touch) {
 
 /**
  * Pinch zoom for the map: two-finger touch pinches, ctrl+wheel (trackpad pinch in Chrome, Edge and Firefox) and Safari
- * gesture events. One-finger panning and plain wheel scrolling stay native.
+ * gesture events. One-finger panning is useMapGestures', and plain wheel scrolling stays native.
  *
  * During a gesture the map keeps its layout and is scaled with a CSS transform, so every frame is cheap; when the
  * gesture ends the zoom is committed once as a new layout width and scroll offset. A pinch can only start while the
