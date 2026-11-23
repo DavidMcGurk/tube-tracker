@@ -151,26 +151,29 @@ button:disabled {
 }
 
 /*
- * The map tab fills the window exactly, on phones too, and the map viewport takes the remaining height: the page itself
- * never scrolls, so only the map moves under a finger (a scrolling page also slid the browser's toolbars in and out,
- * resizing everything mid-drag).
+ * The app fills the window exactly, on phones too: the title and tabs stay put at the top, and below them the map
+ * takes the remaining height, or Statistics and Settings scroll in their own area. The page itself never scrolls, so
+ * nothing slides the browser's toolbars in and out (on the map that resized everything mid-drag).
  */
-.app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+.app-shell:not([data-map-fullscreen='true']) {
   display: grid;
   width: 100%;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
-  /* Header, tabs, the signed-out notice (0 tall when there isn't one) and the map. */
+  /* Header, tabs, the signed-out notice (0 tall when there isn't one) and the tab's content. */
   grid-template-rows: auto auto auto minmax(0, 1fr);
   overflow: hidden;
 
-  & > main.map-main {
+  & > main {
     grid-row: 4;
     box-sizing: border-box;
     width: 100%;
-    height: 100%;
     min-height: 0;
+  }
+
+  & > main.map-main {
+    height: 100%;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     overflow: hidden;
   }
@@ -197,9 +200,23 @@ button:disabled {
   }
 }
 
-/* Phones: less space around the title and tabs, which the map can use (it shares the screen with them). */
+/* Statistics and Settings scroll the full width of the window, so they scroll from anywhere beside the content too. */
+.app-shell > main.page-scroll {
+  max-width: none;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  & > .page-content {
+    padding-right: calc(1rem + env(safe-area-inset-right));
+    padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));
+    padding-left: calc(1rem + env(safe-area-inset-left));
+  }
+}
+
+/* Phones: less space around the title and tabs, which the content below can use. */
 @media (max-width: 640px) {
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+  .app-shell:not([data-map-fullscreen='true']) {
     & > header {
       padding-top: calc(0.5rem + env(safe-area-inset-top));
       padding-bottom: 0.5rem;
@@ -212,9 +229,9 @@ button:disabled {
   }
 }
 
-/* Short screens (a phone held sideways): the title and the tabs share a row, to leave the map more height. */
+/* Short screens (a phone held sideways): the title and the tabs share a row, to leave the content more height. */
 @media (max-height: 559px) {
-  .app-shell[data-active-tab='map']:not([data-map-fullscreen='true']) {
+  .app-shell:not([data-map-fullscreen='true']) {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
 
@@ -241,21 +258,24 @@ button:disabled {
       grid-column: 1 / -1;
     }
 
-    & > main.map-main {
+    & > main {
       grid-row: 3;
       grid-column: 1 / -1;
     }
   }
 }
 
-/* No double-tap or pinch zoom of the page on the map tab (the map has its own pinch zoom; see usePageZoomLock). */
-.app-shell[data-active-tab='map'] {
-  touch-action: pan-x pan-y;
+/*
+ * The page never zooms or pans sideways: only vertical scrolling (Statistics, Settings, the route options) is left to
+ * the browser. The map pans and pinch-zooms in script (touch-action: none); see also usePreventPageZoom.
+ */
+.app-shell {
+  touch-action: pan-y;
 }
 
-/* Nor can the page be scrolled, pulled down or bounced on the map tab. */
-html:has(.app-shell[data-active-tab='map']),
-html:has(.app-shell[data-active-tab='map']) body {
+/* Nor can the page itself be scrolled, pulled down or bounced. */
+html,
+body {
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -393,11 +413,6 @@ html:has(.app-shell[data-active-tab='map']) body {
   & .route-options {
     max-height: min(28vh, 300px);
   }
-}
-
-html:has(.app-shell[data-map-fullscreen='true']),
-body:has(.app-shell[data-map-fullscreen='true']) {
-  overflow: hidden;
 }
 
 /* ---------------------------------------------------------------- Map SVG: surfaces and interaction */

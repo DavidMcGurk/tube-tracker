@@ -84,16 +84,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
-test('the map tab fits the screen: the page doesn’t scroll or zoom there, and other tabs still do', async ({ page }, testInfo) => {
+test('the app fits the screen: the title and tabs stay put, only the content scrolls, and nothing zooms', async ({ page }, testInfo) => {
   await openMap(page);
   const pageState = () => page.evaluate(() => {
     const view = document.querySelector('.tube-map-viewport')?.getBoundingClientRect();
+    const header = document.querySelector('.app-shell > header')!.getBoundingClientRect();
     return {
       overflow: document.documentElement.scrollHeight - window.innerHeight,
       htmlOverflow: getComputedStyle(document.documentElement).overflowY,
       gapUnderMap: view ? window.innerHeight - view.bottom : null,
       viewportTag: document.querySelector<HTMLMetaElement>('meta[name="viewport"]')!.content,
-      touchAction: getComputedStyle(document.querySelector('.app-shell')!).touchAction
+      touchAction: getComputedStyle(document.querySelector('.app-shell')!).touchAction,
+      header: { top: header.top, height: header.height }
     };
   });
   const onMap = await pageState();
@@ -101,19 +103,30 @@ test('the map tab fits the screen: the page doesn’t scroll or zoom there, and 
   expect(onMap.htmlOverflow).toBe('hidden');
   expect(onMap.gapUnderMap, 'the map reaches down to the bottom of the screen').toBeLessThan(48);
   expect(onMap.viewportTag).toContain('user-scalable=no');
-  expect(onMap.touchAction).toBe('pan-x pan-y');
+  expect(onMap.touchAction, 'no page zoom or sideways pan').toBe('pan-y');
 
   await selectStation(page, testInfo, 'paddington');
   await selectStation(page, testInfo, 'waterloo');
   await expect(page.locator('.route-action-bar')).toBeVisible();
   expect((await pageState()).overflow, 'nor with the route bar showing').toBeLessThanOrEqual(0);
 
-  await page.getByRole('button', { name: 'Statistics' }).click();
-  await expect(page.getByRole('progressbar', { name: 'Whole network track travelled' })).toBeVisible();
-  const onStats = await pageState();
-  expect(onStats.htmlOverflow).not.toBe('hidden');
-  expect(onStats.viewportTag).not.toContain('user-scalable');
-  expect(onStats.touchAction).toBe('auto');
+  for (const tab of ['Statistics', 'Settings']) {
+    await page.getByRole('button', { name: tab }).click();
+    const content = page.locator('main.page-scroll');
+    await expect(content).toBeVisible();
+    const before = await pageState();
+    expect(before.overflow, `${tab}: the page itself doesn’t scroll`).toBeLessThanOrEqual(0);
+    expect(before.htmlOverflow).toBe('hidden');
+    expect(before.touchAction).toBe('pan-y');
+    expect(before.header, `${tab}: the title bar matches the map tab’s`).toEqual(onMap.header);
+    // The content scrolls in its own area, under the title and tabs.
+    const scrolled = await content.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      return element.scrollTop;
+    });
+    if (scrolled > 0) expect((await pageState()).header, `${tab}: the title bar stays put while the content scrolls`).toEqual(onMap.header);
+    await expect(page.getByRole('navigation')).toBeInViewport();
+  }
 });
 
 test('a phone held sideways keeps the map usable with a route and its alternatives open', async ({ page }, testInfo) => {
