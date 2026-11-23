@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addPanSample,
   GLIDE_TIME_CONSTANT_MS,
+  glideReach,
   glideStep,
   MAX_GLIDE_SPEED,
   releaseVelocity,
@@ -59,13 +60,28 @@ describe('releaseVelocity', () => {
 });
 
 describe('glideStep', () => {
-  it('slows smoothly and stops, covering speed × τ', () => {
+  it('slows smoothly and stops cleanly, covering exactly its reach', () => {
+    const reach = glideReach(2);
     const { x, y, time } = runGlide({ x: 2, y: 0 }, 16);
     expect(y).toBe(0);
-    // Stopping at a small speed leaves a little of the ideal distance unused.
-    expect(x).toBeGreaterThan(2 * GLIDE_TIME_CONSTANT_MS * 0.98);
-    expect(x).toBeLessThanOrEqual(2 * GLIDE_TIME_CONSTANT_MS);
-    expect(time).toBeLessThan(2000);
+    expect(x).toBeCloseTo(reach.distance, 6);
+    // Less than speed × τ, which a glide with no braking would cover (in about twice the time).
+    expect(x).toBeLessThan(2 * GLIDE_TIME_CONSTANT_MS);
+    expect(time).toBeGreaterThanOrEqual(reach.time);
+    expect(time).toBeLessThan(reach.time + 16);
+    expect(time).toBeLessThan(700);
+  });
+
+  it('spends little time creeping along at under a pixel a frame, which looks like shaking', () => {
+    // A typical flick, at 60 frames a second: count the frames that move it less than a pixel.
+    let velocity: Velocity | null = { x: 1.5, y: 0 };
+    let creeping = 0;
+    while (velocity) {
+      const step = glideStep(velocity, 1000 / 60);
+      if (Math.abs(step.dx) < 1) creeping += 1;
+      velocity = step.velocity;
+    }
+    expect(creeping).toBeLessThanOrEqual(5);
   });
 
   it('goes the same distance at any frame rate', () => {

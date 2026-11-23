@@ -18,10 +18,14 @@ export const STILL_BEFORE_RELEASE_MS = 60;
 export const MIN_GLIDE_SPEED = 0.25;
 /** Faster flicks are capped, so one flick can't throw the map from one side of London to the other. */
 export const MAX_GLIDE_SPEED = 2.5;
-/** Speed decays as e^(−t/τ): a glide covers speed × τ in all and has mostly stopped after about 2τ. */
+/**
+ * The glide slows in proportion to its speed (time constant τ) and also by a steady braking (BRAKE_SPEED / τ per ms).
+ * Fast, it feels like a free glide; slow, the braking takes over and brings it to a clean stop. Without the braking it
+ * would creep the last few pixels for a quarter of a second, one whole pixel at a time, which looks like shaking.
+ */
 export const GLIDE_TIME_CONSTANT_MS = 225;
-/** Below this speed (px/ms) the glide ends. */
-export const STOP_SPEED = 0.02;
+/** The speed (px/ms) below which braking, rather than the glide's own slowing, mostly brings it to a stop. */
+export const BRAKE_SPEED = 0.35;
 
 export interface Velocity {
   x: number;
@@ -54,15 +58,32 @@ export function releaseVelocity(samples: readonly PanSample[], now: number): Vel
   return { x, y };
 }
 
-/** Advances a glide by `dt` ms: how far it moves (px) and its new velocity, which is null once it has stopped. */
+/**
+ * Advances a glide by `dt` ms: how far it moves (px) and its new velocity, which is null once it has stopped.
+ * The speed s follows ds/dt = −(s + BRAKE_SPEED) / τ, worked out exactly over dt so the glide is the same at any frame
+ * rate: s(t) = (s₀ + b)·e^(−t/τ) − b, reaching 0 at t = τ·ln((s₀ + b) / b).
+ */
 export function glideStep(velocity: Velocity, dt: number): { dx: number; dy: number; velocity: Velocity | null } {
-  const decay = Math.exp(-dt / GLIDE_TIME_CONSTANT_MS);
-  // The exact distance under exponential decay over dt, so the glide is the same at any frame rate.
-  const distance = GLIDE_TIME_CONSTANT_MS * (1 - decay);
-  const next = { x: velocity.x * decay, y: velocity.y * decay };
+  const tau = GLIDE_TIME_CONSTANT_MS;
+  const speed = Math.hypot(velocity.x, velocity.y);
+  if (speed <= 0) return { dx: 0, dy: 0, velocity: null };
+  const lifted = speed + BRAKE_SPEED;
+  const stopsIn = tau * Math.log(lifted / BRAKE_SPEED);
+  const t = Math.min(dt, stopsIn);
+  // ∫ s dt from 0 to t.
+  const distance = lifted * tau * (1 - Math.exp(-t / tau)) - BRAKE_SPEED * t;
+  const nextSpeed = dt >= stopsIn ? 0 : lifted * Math.exp(-dt / tau) - BRAKE_SPEED;
+  const scale = distance / speed;
   return {
-    dx: velocity.x * distance,
-    dy: velocity.y * distance,
-    velocity: Math.hypot(next.x, next.y) < STOP_SPEED ? null : next
+    dx: velocity.x * scale,
+    dy: velocity.y * scale,
+    velocity: nextSpeed > 0 ? { x: (velocity.x * nextSpeed) / speed, y: (velocity.y * nextSpeed) / speed } : null
   };
+}
+
+/** How far (px) and how long (ms) a glide at this speed goes before it stops. */
+export function glideReach(speed: number) {
+  const lifted = speed + BRAKE_SPEED;
+  const time = GLIDE_TIME_CONSTANT_MS * Math.log(lifted / BRAKE_SPEED);
+  return { distance: GLIDE_TIME_CONSTANT_MS * speed - BRAKE_SPEED * time, time };
 }

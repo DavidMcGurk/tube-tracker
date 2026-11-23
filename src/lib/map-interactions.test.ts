@@ -27,12 +27,13 @@ describe('map interaction helpers', () => {
     expect(stepMapZoom(4, -0.25)).toBe(3.75);
   });
 
-  it('starts wider computer screens further out, so they show more of the map at about the same size', () => {
-    // Map viewport widths: a tablet, a 1280 px laptop, a 1440 px screen, and a 1920 px or wider monitor.
+  it('starts wider computer screens further out: the whole map’s width on a widescreen monitor', () => {
+    // Map viewport widths: a tablet, a 1280 px laptop, a 1440 px screen, a 1600 px one, and a 1920 px or wider monitor.
     expect(getDesktopDefaultZoom(762)).toBe(DESKTOP_DEFAULT_MAP_ZOOM);
     expect(getDesktopDefaultZoom(1222)).toBe(2);
     expect(getDesktopDefaultZoom(1382)).toBe(1.75);
-    expect(getDesktopDefaultZoom(1862)).toBe(1.25);
+    expect(getDesktopDefaultZoom(1542)).toBe(1.5);
+    expect(getDesktopDefaultZoom(1862)).toBe(MIN_MAP_ZOOM);
     expect(getDesktopDefaultZoom(5000)).toBe(MIN_MAP_ZOOM);
     expect(getDesktopDefaultZoom(0)).toBe(DESKTOP_DEFAULT_MAP_ZOOM);
   });
