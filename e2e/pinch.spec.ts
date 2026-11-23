@@ -124,9 +124,10 @@ test('a two-finger pinch zooms the map about the fingers, not the page', async (
   expectPageNotZoomed(start, zoomedIn);
   expectAnchored(zoomedIn, anchor);
 
-  await pinch(0.8);
+  // Not so far out that the map reaches its edge, where it can't keep the point under the fingers.
+  await pinch(0.9);
   const zoomOutRatio = await readFingerRatio(page);
-  expect(zoomOutRatio).toBeLessThan(0.8);
+  expect(zoomOutRatio).toBeLessThan(0.9);
   const expectedOut = Math.max(1, zoomedIn.zoom * zoomOutRatio);
   await expect.poll(async () => (await readMap(page, anchor)).zoom).toBeCloseTo(expectedOut, 1);
   const zoomedOut = await readMap(page, anchor, zoomedIn.mapPointUnder);

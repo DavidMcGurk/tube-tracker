@@ -119,9 +119,9 @@ test('a tap during a glide stops it and still chooses the station', async ({ pag
   expect(await scrollOf(page)).toEqual(afterTap);
 });
 
-test('dragging past the bottom of the map scrolls the page on', async ({ page }, testInfo) => {
+test('dragging past the bottom of the map leaves the page where it is', async ({ page }, testInfo) => {
   await openMap(page);
-  // With a route chosen the page has room to scroll (for the bar under the map).
+  // With a route chosen the bar floats over the map.
   await selectStation(page, testInfo, 'paddington');
   await selectStation(page, testInfo, 'waterloo');
   await expect(page.locator('.route-action-bar')).toBeVisible();
@@ -140,7 +140,9 @@ test('dragging past the bottom of the map scrolls the page on', async ({ page },
   }
   await page.waitForTimeout(150);
   await touch(cdp, 'touchEnd', x, y - 100);
-  expect((await scrollOf(page)).page).toBeGreaterThan(50);
+  expect((await scrollOf(page)).page).toBe(0);
+  // There's nothing to scroll: the map tab fits the screen.
+  expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
 });
 
 test('a slow drag in fractional steps keeps the map under the finger', async ({ page }) => {
