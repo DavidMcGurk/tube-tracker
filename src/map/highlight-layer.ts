@@ -5,6 +5,7 @@ import {
   getLineSvgClasses,
   closestPointOnComponent,
   joinTouchingComponents,
+  maximumPathGap,
   polylineLength,
   sampleLineComponents,
   toPathData,
@@ -148,8 +149,8 @@ function warnOnce(sectionId: string, message: string) {
 
 interface Trace {
   pathData: string;
-  /** Drawn on a path the map marks as a part-time service. */
-  partTime: boolean;
+  /** The part of the trace drawn on a path the map marks as a part-time service, if any. */
+  partTimePathData: string | null;
 }
 
 /**
@@ -160,14 +161,16 @@ function traceSection(svg: SVGSVGElement, geometry: MapGeometry, section: TrackS
   const stationPositions = getStationPositions(svg, geometry);
   const from = stationPositions?.get(section.from);
   const to = stationPositions?.get(section.to);
-  if (!from?.length || !to?.length) {
+  if (!stationPositions || !from?.length || !to?.length) {
     warnOnce(section.id, `Unable to show section "${section.id}" because a station marker is missing`);
     return [];
   }
 
   const components = getLineComponents(svg, geometry, section.lineId);
   const fits = fitEachComponent(components, from, to);
-  const best = fits[0] ?? fitJoinedComponents(components, from, to);
+  const best = fitAvoidingSkippedStations(fits, components, from, to, skippedStationPositions(section, stationPositions))
+    ?? fits[0]
+    ?? fitJoinedComponents(components, from, to);
   if (!best) {
     warnOnce(section.id, `Unable to follow map line geometry for section "${section.id}"`);
     return [];
@@ -179,20 +182,94 @@ function traceSection(svg: SVGSVGElement, geometry: MapGeometry, section: TrackS
     warnOnce(section.id, `Rejected an implausibly long map trace for section "${section.id}"`);
     return [];
   }
-  const traces = [{ points: bestPoints, partTime: best.partTime }];
+  const traces = [{ points: bestPoints, fit: best }];
   for (const fit of fits.slice(1)) {
     if (fit.points === best.points || fit.classRank !== best.classRank) continue;
     const points = tracedPoints(fit);
     if (points.length < 2 || !staysAlongside(points, bestPoints) || !staysAlongside(bestPoints, points)) continue;
-    if (traces.every((trace) => averageOffset(points, trace.points) > sameTrackOffset)) traces.push({ points, partTime: fit.partTime });
+    if (traces.every((trace) => averageOffset(points, trace.points) > sameTrackOffset)) traces.push({ points, fit });
   }
-  return traces.map(({ points, partTime }) => ({ pathData: toPathData(points), partTime }));
+  return traces.map(({ points, fit }) => {
+    const partTimePoints = tracedPartTimePoints(fit);
+    return { pathData: toPathData(points), partTimePathData: partTimePoints ? toPathData(partTimePoints) : null };
+  });
 }
 
 function tracedPoints(fit: ComponentFit) {
   const low = Math.min(fit.from.index, fit.to.index);
   const high = Math.max(fit.from.index, fit.to.index);
   return fit.points.slice(low, high + 1);
+}
+
+function tracedPartTimePoints(fit: ComponentFit) {
+  if (fit.partTime) return tracedPoints(fit);
+  if (!fit.partTimeSpan) return null;
+  const low = Math.max(Math.min(fit.from.index, fit.to.index), fit.partTimeSpan[0]);
+  const high = Math.min(Math.max(fit.from.index, fit.to.index), fit.partTimeSpan[1]);
+  return high > low ? fit.points.slice(low, high + 1) : null;
+}
+
+/** A trace passing this close to a station's marker is taken to run through that station. */
+const throughStationDistance = 16;
+
+/**
+ * Where the map draws the stations a section runs past without stopping, when the same line also links each of them
+ * to both of the section's stations. The Elizabeth line's direct Liverpool Street–Stratford track bypasses Whitechapel,
+ * for example, while its other trains call there.
+ */
+function skippedStationPositions(section: TrackSection, stationPositions: ReadonlyMap<string, Point[]>) {
+  const neighbours = (stationId: string) => new Set((network.getStation(stationId)?.getConnections() ?? [])
+    .filter((link) => link.type === 'track' && link.lineId === section.lineId)
+    .map((link) => link.getOtherStationId(stationId)));
+  const toNeighbours = neighbours(section.to);
+  return [...neighbours(section.from)].filter((stationId) => toNeighbours.has(stationId))
+    .flatMap((stationId) => stationPositions.get(stationId) ?? []);
+}
+
+function runsThrough(fit: ComponentFit, positions: readonly Point[]) {
+  const points = tracedPoints(fit);
+  return positions.some((position) => distanceToTrace(position, points) <= throughStationDistance);
+}
+
+/**
+ * When the best fit runs through a station the section skips, the best fit that doesn't, if the map draws one: the
+ * section's own drawn path, followed onto the line it joins where needed.
+ */
+function fitAvoidingSkippedStations(
+  fits: readonly ComponentFit[],
+  components: readonly RankedComponent[],
+  from: readonly Point[],
+  to: readonly Point[],
+  skipped: readonly Point[]
+) {
+  const best = fits[0];
+  if (skipped.length === 0 || !best || !runsThrough(best, skipped)) return null;
+  return [...fits.slice(1), ...fitJunctionJoins(components, from, to)]
+    .filter((fit) => !runsThrough(fit, skipped))
+    .sort((a, b) => a.score - b.score)[0] ?? null;
+}
+
+/**
+ * Fits that follow one drawn path to where it ends on another, then carry on along that one: the map draws some
+ * tracks as a short path that joins the main line partway along, rather than at a station.
+ */
+function fitJunctionJoins(components: readonly RankedComponent[], from: readonly Point[], to: readonly Point[]) {
+  const fits: ComponentFit[] = [];
+  for (const branch of components) {
+    for (const main of components) {
+      if (branch === main) continue;
+      for (const toJunction of [branch.points, [...branch.points].reverse()]) {
+        const junction = closestPointOnComponent(main.points, [toJunction.at(-1)!]);
+        if (!junction || junction.distance > maximumPathGap) continue;
+        for (const onward of [main.points.slice(junction.index), main.points.slice(0, junction.index + 1).reverse()]) {
+          const fit = fitComponent({ points: [...toJunction, ...onward], classRank: Math.max(branch.classRank, main.classRank) }, from, to);
+          if (!fit) continue;
+          fits.push(branch.partTime ? { ...fit, partTimeSpan: [0, toJunction.length - 1] } : fit);
+        }
+      }
+    }
+  }
+  return fits;
 }
 
 function distanceToTrace(point: Point, trace: readonly Point[]) {
@@ -214,6 +291,8 @@ interface ComponentFit {
   points: PathComponent;
   classRank: number;
   partTime: boolean;
+  /** For a fit joined from two paths: the range of its points drawn on a part-time path. */
+  partTimeSpan?: readonly [start: number, end: number];
   from: ClosestPoint;
   to: ClosestPoint;
   score: number;
@@ -426,7 +505,7 @@ export function renderLinkHighlights(svg: SVGSVGElement, documentKey: string, ki
     }
     // Travelled track covers every parallel drawing of a section; the selected route follows just one.
     const traces = traceSection(svg, geometry, link);
-    for (const { pathData, partTime } of kind === 'travelled' ? traces : traces.slice(0, 1)) {
+    for (const { pathData, partTimePathData } of kind === 'travelled' ? traces : traces.slice(0, 1)) {
       targets.main.appendChild(createPath(document, className, link.id, pathData));
       targets.casing.appendChild(createPath(document, casingClassName, link.id, pathData));
       if (!targets.line) continue;
@@ -434,7 +513,7 @@ export function renderLinkHighlights(svg: SVGSVGElement, documentKey: string, ki
       const artwork = getLineArtwork(svg, link.lineId);
       targets.line.appendChild(createPath(document, `app-travelled-line s${artwork.svgClass}`, link.id, pathData));
       if (artwork.casing) targets.lineCasing?.appendChild(createPath(document, `app-travelled-line-casing b${artwork.svgClass}`, link.id, pathData));
-      if (partTime) targets.linePartTime?.appendChild(createPath(document, 'app-travelled-line-part-time', link.id, pathData));
+      if (partTimePathData) targets.linePartTime?.appendChild(createPath(document, 'app-travelled-line-part-time', link.id, partTimePathData));
     }
   }
 }
