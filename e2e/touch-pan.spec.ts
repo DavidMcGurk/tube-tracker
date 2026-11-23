@@ -10,18 +10,28 @@ test.beforeEach(({ }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone-393', 'raw touch input (CDP) on one Chromium phone project');
 });
 
-async function touch(cdp: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number) {
-  await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+/**
+ * Sends a touch event. A flick passes `at` (ms since the epoch) to stamp the event with that time rather than when it
+ * arrives: the app measures a flick's speed from event times, and a slow machine (e.g. CI) can deliver the lift long
+ * enough after the last move that it reads as the finger being held still.
+ */
+async function touch(cdp: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number, at?: number) {
+  await cdp.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }],
+    ...(at === undefined ? {} : { timestamp: at / 1000 })
+  });
 }
 
-/** Drags from (x, y) by (dx, dy) in `steps` moves about 16 ms apart, lifting at once at the end (a flick). */
+/** Drags from (x, y) by (dx, dy) in `steps` moves 16 ms apart, lifting at once at the end (a flick). */
 async function drag(page: Page, cdp: CDPSession, x: number, y: number, dx: number, dy: number, steps = 6) {
-  await touch(cdp, 'touchStart', x, y);
+  const start = Date.now();
+  await touch(cdp, 'touchStart', x, y, start);
   for (let i = 1; i <= steps; i++) {
     await page.waitForTimeout(16);
-    await touch(cdp, 'touchMove', x + (dx * i) / steps, y + (dy * i) / steps);
+    await touch(cdp, 'touchMove', x + (dx * i) / steps, y + (dy * i) / steps, start + 16 * i);
   }
-  await touch(cdp, 'touchEnd', x + dx, y + dy);
+  await touch(cdp, 'touchEnd', x + dx, y + dy, start + 16 * steps);
 }
 
 const scrollOf = (page: Page) => page.evaluate(() => {
@@ -144,12 +154,13 @@ test('a quick short flick glides', async ({ page }) => {
   const cdp = await page.context().newCDPSession(page);
   const { x, y } = await viewportCentre(page);
   // One move under the drag threshold, then one past it, then lift.
-  await touch(cdp, 'touchStart', x, y);
+  const start = Date.now();
+  await touch(cdp, 'touchStart', x, y, start);
   await page.waitForTimeout(16);
-  await touch(cdp, 'touchMove', x - 6, y);
+  await touch(cdp, 'touchMove', x - 6, y, start + 16);
   await page.waitForTimeout(16);
-  await touch(cdp, 'touchMove', x - 50, y);
-  await touch(cdp, 'touchEnd', x - 50, y);
+  await touch(cdp, 'touchMove', x - 50, y, start + 32);
+  await touch(cdp, 'touchEnd', x - 50, y, start + 32);
   const lifted = await scrollOf(page);
   await page.waitForTimeout(250);
   expect((await scrollOf(page)).left).toBeGreaterThan(lifted.left + 10);
